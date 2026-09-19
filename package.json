@@ -1,5 +1,6 @@
 {
   "name": "jev-use",
+  "mcpName": "io.github.shitianfang/jev-use",
   "version": "0.6.0",
   "main": "dist/index.js",
   "scripts": {
@@ -21,7 +22,8 @@
     "claude-code",
     "codex",
     "pi",
-    "mcp"
+    "mcp",
+    "pi-package"
   ],
   "author": "shitianfang",
   "license": "MIT",

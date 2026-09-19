@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.shitianfang/jev-use",
+  "description": "Hands the agent steps that need no text output to Jev: typed yes/no, pick-one and score questions answered in one call, with typed escalation back to the LLM.",
+  "repository": {
+    "url": "https://github.com/shitianfang/jev-use",
+    "source": "github"
+  },
+  "version": "0.6.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "jev-use",
+      "version": "0.6.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
