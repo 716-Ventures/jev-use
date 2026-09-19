@@ -37,6 +37,70 @@ distributions are rarer than hand labels suggest. Treat `unsure`
 via the margin fallback as a coarse signal, and tune the threshold on your
 own traffic.
 
+# Fair-baseline decision race
+
+`pong.mjs`'s headline — 86 Jev decisions in 20 s against 6 (claude-haiku-4.5)
+and 3 (gemini-3-flash) — runs the baselines the way an agent loop normally
+calls them, with nothing disabled. That is what a naive caller gets, and it
+is **not** an honest model comparison. `node bench/examples/fairbase.mjs`
+asks the same three-option question of the same states with the baselines
+properly configured: strict JSON-schema enum output, and
+`providerOptions.google.thinkingConfig.thinkingBudget: 0` for Gemini.
+
+40 fresh states per arm, run twice, 2026-09-19, Vercel AI Gateway.
+
+| arm | n | p50 | p95 | out tok | off-set | $/1k judgments |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `jev` | 40 | **225 ms** | 890 | 38 | 0 | **$0.018** |
+| `haiku-free` | 40 | 2,874 ms | 4,899 | 315 | 0 | $1.67 |
+| `haiku-strict` | 40 | 691 ms | 1,200 | 8 | 0 | $0.30 |
+| `gemini-free` | 40 | 6,406 ms | 14,686 | 851 | 5 | $2.60 |
+| `gemini-strict` | 40 | 1,027 ms | 2,438 | 6 | 0 | $0.09 |
+
+(Run 1 is within 1–2% on every p50 except `haiku-free`, which moved 10%;
+tails are not stable — `gemini-free`'s p95 moved 7.0 s to 14.7 s between
+runs. Costs are measured tokens times published list prices, and every chat
+row reconciles with the gateway's own per-call `usage.cost`. Jev's rate is
+from the gateway catalogue: $0.042/Mtok in, $0 out.)
+
+**The honest conclusions:**
+
+- Jev's latency lead over a *properly configured* baseline is **3.0–3.1×**,
+  not 14×. The 86-vs-6 figure describes what an unconfigured caller gets,
+  and should be framed that way wherever it appears.
+- What survives the fair fight is **cost** — 16× cheaper than constrained
+  Haiku, 145× cheaper than the unconstrained call most loops actually make —
+  and **answer shape**: the verdict is inside the option set by construction
+  instead of parsed out of prose.
+- **Decision quality is a wash.** All five arms land 24–30 correct out of 40
+  against a geometric reference. Nothing here says Jev decides better.
+
+## Mechanism findings
+
+- `reasoning_effort: "none" | "minimal" | "low"` **backfires on Haiku**: it
+  enables extended thinking (403–431 reasoning tokens, 3.5–3.8 s) where
+  omitting the parameter entirely gives zero.
+- Gemini's thinking is only switchable off through
+  `providerOptions.google.thinkingConfig.thinkingBudget: 0`. `thinking_level`,
+  `extra_body` and the top-level `google.thinkingConfig` are all ignored.
+- Capping `max_tokens` alone is useless — both models truncate mid-prose with
+  no verdict. Floors that still answer: Haiku 16, Gemini 64.
+- A forced tool call with the same enum is a latency tie on Haiku
+  (648 vs 649 ms), slightly worse on Gemini, and 3× more expensive in prompt
+  tokens. The schema was adopted; the choice does not move the headline.
+
+## Two findings against Jev
+
+- `gemini-free`'s 5 off-set answers are truncations at the 1000-token
+  ceiling after ~960 reasoning tokens — budget artifacts, not model
+  failures. The unconstrained arm's errors should not be read as Gemini
+  being unable to answer.
+- **Jev answered `stay` zero times in 80 calls.** On the 13 states where the
+  reference says hold position it scored 0; every other arm managed 1–3. Its
+  directional judgment was perfect (27/27, both runs) on the states where
+  the reference says move. A model that never selects one of your options
+  fails silently — check the answer distribution, not only the accuracy.
+
 # Agreement rate — 454 judgments
 
 Every other number here is latency. This one is correctness, and it is
@@ -175,6 +239,10 @@ Honest findings from these runs:
 - **Weak spot in completion checks:** silent success (empty output,
   `files: 0`) scores far less decisively (P=0.74) than explicit green
   output (0.97–0.99). Give Jev explicit success evidence when you can.
+- **The Pong rate gap is against an unconfigured baseline.** Both LLM
+  lanes run with nothing disabled. With a strict enum schema (and Gemini
+  thinking off) the honest gap is 3×, not 14× — see the fair-baseline
+  section above before quoting 86-vs-6 anywhere.
 - **Pong caveats.** 69 of Jev's 86 decisions carried `escalate: true`
   (thin margins on a 3-option question — see the margin finding above);
   the sim plays the answer anyway, a real handoff would not. The LLM
