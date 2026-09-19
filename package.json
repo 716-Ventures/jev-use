@@ -27,7 +27,7 @@
   ],
   "author": "shitianfang",
   "license": "MIT",
-  "description": "Claude Code / Codex / pi plugin that hands the agent steps needing no text output to Jev (TypeSafe's judgment model) — ~200ms and ~$0.00004 per judgment, with typed escalation back to the LLM.",
+  "description": "Claude Code / Codex / pi plugin that hands the agent steps needing no text output to Jev (TypeSafe's judgment model) — measured p50 ~230 ms and ~$0.02 per 1,000 judgments, with typed escalation back to the LLM.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.6.5"
