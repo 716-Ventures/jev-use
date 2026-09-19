@@ -1,0 +1,285 @@
+/**
+ * The jev-use handoff protocol.
+ *
+ * Jev (TypeSafe AI's System One model) answers typed questions about a state
+ * in one forward pass — it never generates text. An LLM and Jev cooperate by
+ * handing off:
+ *
+ *   LLM ──(state + typed questions)──▶ Jev        fast, cheap, calibrated
+ *   Jev ──(verdict, escalate=true)──▶ LLM         when a boundary is hit
+ *
+ * Escalation is not an error: it is a typed signal that this step belongs to
+ * the LLM. The boundaries, in the words the verdict uses:
+ *
+ *   - writing     : the step must produce new content (text, code, free-form
+ *     tool arguments). Structurally impossible for Jev; decided BEFORE
+ *     calling it.
+ *   - open_ended  : the question cannot be expressed as noul / choice / score
+ *     (no enumerable options, no ordered levels). Decided BEFORE calling.
+ *   - oversized   : the state itself does not fit in Jev's context. Also
+ *     decided BEFORE calling, for the whole batch.
+ *   - unsure      : Jev answered but the distribution is too flat to act on.
+ *     Decided AFTER calling, against a configurable threshold.
+ *
+ * Plus one operational reason, `unreachable`: Jev being down must degrade to
+ * "the LLM handles it", never block the loop.
+ *
+ * Questions are written with the three builders at the bottom of this file —
+ * `check` (noul), `pick` (choice), `rate` (score). The type names and wire
+ * values keep Jev's own vocabulary; the builders only spell it in English.
+ */
+
+/** Jev's three question primitives. */
+export type QuestionType = "noul" | "choice" | "score";
+
+/** Why control goes (back) to the LLM — the vocabulary of the whole handoff. */
+export type EscalationReason =
+  | "writing"
+  | "open_ended"
+  | "oversized"
+  | "unsure"
+  | "unreachable";
+
+/** noul only: what a yes and a no mean, to sharpen calibration. */
+export interface NoulCriteria {
+  true: string;
+  false: string;
+}
+
+/**
+ * A single typed question against a state — the shape that crosses the wire
+ * and the shape screening validates. Written with `check` / `pick` / `rate`
+ * rather than by hand.
+ */
+export interface Question {
+  /** Caller-assigned id, echoed back in the verdict. Defaults to `q<index>`. */
+  id?: string;
+  type: QuestionType;
+  /** The question text, e.g. "Did the test suite pass?" */
+  question: string;
+  /** choice only: >= 2 options — labels, or label → meaning. */
+  options?: string[] | Record<string, string>;
+  /** score only: >= 2 ordered level descriptions, worst-to-best or any fixed order. */
+  levels?: string[];
+  /** noul only (optional): what a yes and a no mean, to sharpen calibration. */
+  criteria?: NoulCriteria;
+}
+
+/** "Is this true?" — the verdict answers with P(yes) in [0, 1]. Built by `check`. */
+export interface NoulQuestion extends Question {
+  type: "noul";
+}
+
+/**
+ * "Which one?" — the verdict answers with one of the option labels. Built by
+ * `pick`, which infers `Label` from the options you pass, so the answer is
+ * typed as exactly those labels.
+ */
+export interface ChoiceQuestion<Label extends string = string> extends Question {
+  type: "choice";
+  options: Label[] | Record<Label, string>;
+}
+
+/**
+ * "How much?" — the verdict answers with a possibly-fractional index into the
+ * ordered levels (Jev returns the distribution's expectation, e.g. 1.99).
+ * Built by `rate`.
+ */
+export interface ScoreQuestion extends Question {
+  type: "score";
+  levels: string[];
+}
+
+/**
+ * The answer type a verdict for question `Q` carries: the option label for a
+ * choice, a number for noul (probability) and score (level index).
+ */
+export type AnswerOf<Q> = Q extends ChoiceQuestion<infer Label>
+  ? Label
+  : Q extends NoulQuestion | ScoreQuestion
+    ? number
+    : number | string;
+
+/** The state both parties share: any serializable context/environment. */
+export type State = string | Record<string, unknown> | unknown[];
+
+/** One batch for the engine: a state, its questions, and the call's limits. */
+export interface JudgeRequest {
+  state: State;
+  questions: Question[];
+  /** Escalate any verdict whose confidence falls below this. Default 0.75. */
+  confidenceThreshold?: number;
+  /** Backend model id override, e.g. "jev-latest". */
+  model?: string;
+}
+
+/** One verdict per question — the unit that crosses the handoff boundary. */
+export interface Verdict<TAnswer extends number | string = number | string> {
+  id: string;
+  type: QuestionType;
+  /**
+   * noul   → P(yes) in [0, 1]
+   * choice → the winning option label
+   * score  → possibly-fractional index into `levels`
+   * null when the question never reached Jev (handed back before the call).
+   */
+  answer: TAnswer | null;
+  /** choice/score: full probability distribution, when the backend provides it. */
+  distribution?: Record<string, number>;
+  /** score: index → level description, echoing the request's levels. */
+  legend?: Record<string, string>;
+  /**
+   * Calibrated confidence in [0, 1]. noul: certainty 2·|p − 0.5| (the API
+   * reports none); choice/score: the backend's confidence, else the
+   * top-vs-runner-up margin. 0 when the question never reached Jev.
+   */
+  confidence: number;
+  /** True ⇒ the LLM should take this question over. */
+  escalate: boolean;
+  reason?: EscalationReason;
+  /** Human-readable guidance for the LLM taking over. */
+  hint?: string;
+}
+
+/** Token accounting a backend reported for one call, when it reports any. */
+export interface Usage {
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+/**
+ * The engine's result: one verdict per question, in the caller's order. This
+ * is the shape the wire surfaces (MCP tools, `jev-use judge`) hand back; the
+ * `Jev` client adds the answers keyed by name on top of it.
+ */
+export interface JudgeResult {
+  verdicts: Verdict[];
+  /** True if any verdict escalated — the one-glance signal for the caller. */
+  escalated: boolean;
+  /** Which backend actually served the call ("mock" | "typesafe" | ...). */
+  backend: string;
+  model?: string;
+  latencyMs?: number;
+  usage?: Usage;
+}
+
+/** The agent action a gate call judges. */
+export interface GateAction {
+  /** Tool / command name, e.g. "Bash". */
+  tool: string;
+  /** The tool input, verbatim. */
+  input: string | Record<string, unknown>;
+  /** What the action is meant to accomplish, when known. */
+  description?: string;
+}
+
+/** An agent action to be gated (jev_gate sugar over a choice question). */
+export interface GateRequest {
+  state: State;
+  action: GateAction;
+  confidenceThreshold?: number;
+  model?: string;
+}
+
+/** What a gate lets the agent do: run it, refuse it, or ask someone else. */
+export type GateDecision = "allow" | "deny" | "escalate";
+
+/** The verdict on one proposed action. */
+export interface GateResult {
+  decision: GateDecision;
+  confidence: number;
+  reason?: EscalationReason;
+  distribution?: Record<string, number>;
+  hint?: string;
+  backend: string;
+  latencyMs?: number;
+  usage?: Usage;
+}
+
+/** Escalate below this confidence unless the backend or caller says otherwise. */
+export const DEFAULT_CONFIDENCE_THRESHOLD = 0.75;
+
+/**
+ * Ceiling for the serialized state, in estimated tokens. Jev's context is
+ * 64k with at most 32k for the state; stay under it with margin.
+ */
+export const DEFAULT_MAX_STATE_TOKENS = 30_000;
+
+/** The id a question gets when the caller named none. */
+export function defaultQuestionId(index: number): string {
+  return `q${index}`;
+}
+
+/** Normalize choice options to label → meaning ("" when labels-only). */
+export function optionEntries(
+  options: string[] | Record<string, string>,
+): [string, string][] {
+  return Array.isArray(options)
+    ? options.map((label) => [label, ""] as [string, string])
+    : Object.entries(options);
+}
+
+/** Rough token estimate (~4 chars/token) — a guard rail, not an accountant. */
+export function estimateTokens(state: State): number {
+  const text = typeof state === "string" ? state : JSON.stringify(state);
+  return Math.ceil(text.length / 4);
+}
+
+/** The state as the backends send it: strings verbatim, everything else JSON. */
+export function serializeState(state: State): string {
+  return typeof state === "string" ? state : JSON.stringify(state);
+}
+
+/**
+ * Ask whether something is true (Jev's `noul` primitive). The verdict answers
+ * with the probability, and `confidence` is how far that sits from a coin flip.
+ *
+ * ```ts
+ * check("Did the run fully succeed?")
+ * check("Is the branch safe to merge?", {
+ *   true: "green CI and no conflicts",
+ *   false: "anything failing or unmerged",
+ * })
+ * ```
+ */
+export function check(question: string, criteria?: NoulCriteria): NoulQuestion {
+  return criteria
+    ? { type: "noul", question, criteria }
+    : { type: "noul", question };
+}
+
+/**
+ * Ask which of the enumerated options fits (Jev's `choice` primitive). Pass
+ * labels, or label → what picking it means (the meanings measurably help).
+ * The verdict answers with one of those labels, and nothing else.
+ *
+ * ```ts
+ * pick("Next action?", { merge: "all green", rerun: "looks flaky", hold: "needs attention" })
+ * pick("Next action?", ["merge", "rerun", "hold"])
+ * ```
+ *
+ * Fewer than two options is not a choice; such a question escalates as
+ * `open_ended` instead of being sent.
+ */
+export function pick<const Label extends string>(
+  question: string,
+  options: Label[] | Record<Label, string>,
+): ChoiceQuestion<Label> {
+  return { type: "choice", question, options };
+}
+
+/**
+ * Ask where the state sits on an ordered scale (Jev's `score` primitive). The
+ * verdict answers with a possibly-fractional index into the levels, and
+ * `legend` maps indices back to your words.
+ *
+ * ```ts
+ * rate("How risky?", ["routine", "worth a look", "incident"])
+ * ```
+ *
+ * Fewer than two levels is not a scale; such a question escalates as
+ * `open_ended` instead of being sent.
+ */
+export function rate(question: string, levels: string[]): ScoreQuestion {
+  return { type: "score", question, levels };
+}
