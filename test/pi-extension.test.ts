@@ -2,6 +2,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import registerJevUse from "../harness/pi/jev-use.js";
+import {
+  ESTIMATED_CONFIDENCE_THRESHOLD,
+  REPORTED_CONFIDENCE_THRESHOLD,
+} from "../src/protocol.js";
 
 interface RegisteredTool {
   name: string;
@@ -31,6 +35,21 @@ describe("pi extension", () => {
   it("registers jev_judge and jev_gate", () => {
     const tools = loadExtension();
     expect([...tools.keys()].sort()).toEqual(["jev_gate", "jev_judge"]);
+  });
+
+  /**
+   * This description said "Default 0.75" while the gateway escalated below 0.4
+   * — a hard-coded number in prose, drifted. Pin it to the code: both numbers,
+   * one per confidence source, as the engine actually applies them.
+   */
+  it("documents the escalation thresholds the engine actually applies", () => {
+    const parameters = loadExtension().get("jev_judge")!.parameters as {
+      properties: { confidence_threshold: { description: string } };
+    };
+    const documented = parameters.properties.confidence_threshold.description;
+    expect(documented).toContain(String(REPORTED_CONFIDENCE_THRESHOLD));
+    expect(documented).toContain(String(ESTIMATED_CONFIDENCE_THRESHOLD));
+    expect(documented).toContain("confidenceFrom");
   });
 
   it("answers a judge call through the mock backend", async () => {

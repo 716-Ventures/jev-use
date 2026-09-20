@@ -19,7 +19,8 @@
  *   - oversized   : the state itself does not fit in Jev's context. Also
  *     decided BEFORE calling, for the whole batch.
  *   - unsure      : Jev answered but the distribution is too flat to act on.
- *     Decided AFTER calling, against a configurable threshold.
+ *     Decided AFTER calling, against the threshold for that answer's
+ *     confidence source (see `ConfidenceSource`).
  *
  * Plus one operational reason, `unreachable`: Jev being down must degrade to
  * "the LLM handles it", never block the loop.
@@ -39,6 +40,19 @@ export type EscalationReason =
   | "oversized"
   | "unsure"
   | "unreachable";
+
+/**
+ * Where a verdict's `confidence` came from — the two are different quantities
+ * and each has its own escalation threshold:
+ *
+ *   - reported  : the model reported it. Jev's own confidence head, returned
+ *     for `choice` and `score` answers (never for `noul`).
+ *   - estimated : jev-use worked it out from the answer's own distribution —
+ *     top-minus-runner-up for `choice`/`score`, `2·|p − 0.5|` for `noul`.
+ *     Systematically lower than the reported head on questions with more than
+ *     two options, so it escalates below a lower number.
+ */
+export type ConfidenceSource = "reported" | "estimated";
 
 /** noul only: what a yes and a no mean, to sharpen calibration. */
 export interface NoulCriteria {
@@ -107,7 +121,11 @@ export type State = string | Record<string, unknown> | unknown[];
 export interface JudgeRequest {
   state: State;
   questions: Question[];
-  /** Escalate any verdict whose confidence falls below this. Default 0.75. */
+  /**
+   * Escalate any verdict whose confidence falls below this, whatever its
+   * source. Unset, each verdict is judged against the threshold for its own
+   * `confidenceFrom` (`REPORTED_` / `ESTIMATED_CONFIDENCE_THRESHOLD`).
+   */
   confidenceThreshold?: number;
   /** Backend model id override, e.g. "jev-latest". */
   model?: string;
@@ -129,11 +147,17 @@ export interface Verdict<TAnswer extends number | string = number | string> {
   /** score: index → level description, echoing the request's levels. */
   legend?: Record<string, string>;
   /**
-   * Calibrated confidence in [0, 1]. noul: certainty 2·|p − 0.5| (the API
-   * reports none); choice/score: the backend's confidence, else the
-   * top-vs-runner-up margin. 0 when the question never reached Jev.
+   * Confidence in [0, 1]. 0 when the question never reached Jev. Read it
+   * together with `confidenceFrom`, which says how it was arrived at — the two
+   * sources are different quantities with different escalation thresholds.
    */
   confidence: number;
+  /**
+   * How `confidence` was arrived at: `"reported"` = the model's own confidence
+   * head, `"estimated"` = computed by jev-use from the answer's distribution.
+   * Absent when the question never reached Jev, because nothing was measured.
+   */
+  confidenceFrom?: ConfidenceSource;
   /** True ⇒ the LLM should take this question over. */
   escalate: boolean;
   reason?: EscalationReason;
@@ -188,6 +212,8 @@ export type GateDecision = "allow" | "deny" | "escalate";
 export interface GateResult {
   decision: GateDecision;
   confidence: number;
+  /** How that confidence was arrived at — see `ConfidenceSource`. */
+  confidenceFrom?: ConfidenceSource;
   reason?: EscalationReason;
   distribution?: Record<string, number>;
   hint?: string;
@@ -196,8 +222,35 @@ export interface GateResult {
   usage?: Usage;
 }
 
-/** Escalate below this confidence unless the backend or caller says otherwise. */
-export const DEFAULT_CONFIDENCE_THRESHOLD = 0.75;
+/**
+ * Escalate a model-reported confidence below this. Calibrated on 318 live
+ * choice/score answers over four decision sets (bench/RESULTS.md, "Findings
+ * that changed the defaults"): every clear-cut case stays decisive, the
+ * 20-step triage loop escalates 0/60 steps, and the one command that used to
+ * straddle the line — `sed -i` on tracked source — lands stably on `ask`.
+ */
+export const REPORTED_CONFIDENCE_THRESHOLD = 0.5;
+
+/**
+ * Escalate a jev-use-estimated confidence below this. Lower than the reported
+ * threshold because the estimate is the same scale read conservatively: the
+ * top-vs-runner-up margin runs a median 0.05 (up to 0.17) under the reported
+ * head once the losing mass splits over three or more options.
+ *
+ * The two thresholds cannot be collapsed into one by recomputing the estimate:
+ * the reported head equals the rescaled top probability for `choice` at any
+ * option count, but NOT for `score` past two levels — measured, it can exceed
+ * the winning level's own probability, so no function of the distribution
+ * reproduces it (bench/RESULTS.md, "Not for `score` beyond two levels").
+ */
+export const ESTIMATED_CONFIDENCE_THRESHOLD = 0.4;
+
+/** The threshold one confidence source escalates below, absent an override. */
+export function confidenceThresholdFor(source: ConfidenceSource): number {
+  return source === "reported"
+    ? REPORTED_CONFIDENCE_THRESHOLD
+    : ESTIMATED_CONFIDENCE_THRESHOLD;
+}
 
 /**
  * Ceiling for the serialized state, in estimated tokens. Jev's context is

@@ -7,6 +7,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { MockBackend } from "../src/backends/mock.js";
+import {
+  ESTIMATED_CONFIDENCE_THRESHOLD,
+  REPORTED_CONFIDENCE_THRESHOLD,
+} from "../src/protocol.js";
 import { createServer } from "../src/server.js";
 
 async function connectedClient(backend = new MockBackend()) {
@@ -25,6 +29,29 @@ describe("MCP server", () => {
     const client = await connectedClient();
     const tools = await client.listTools();
     expect(tools.tools.map((t) => t.name).sort()).toEqual(["jev_gate", "jev_judge"]);
+  });
+
+  /**
+   * The tool description is what an LLM reads before every call, and it used to
+   * hard-code "Default 0.75" while the engine escalated below 0.4/0.5. Pin it to
+   * the constants the engine applies — both numbers, plus the field that says
+   * which one a verdict was judged against.
+   */
+  it("documents the thresholds and the verdict shape the engine produces", async () => {
+    const client = await connectedClient();
+    const tools = await client.listTools();
+    const judgeTool = tools.tools.find((t) => t.name === "jev_judge")!;
+    const documented = (
+      judgeTool.inputSchema.properties as {
+        confidence_threshold: { description: string };
+      }
+    ).confidence_threshold.description;
+    expect(documented).toContain(String(REPORTED_CONFIDENCE_THRESHOLD));
+    expect(documented).toContain(String(ESTIMATED_CONFIDENCE_THRESHOLD));
+    expect(documented).toContain("confidenceFrom");
+    expect(judgeTool.description).toContain("confidenceFrom");
+    const gateTool = tools.tools.find((t) => t.name === "jev_gate")!;
+    expect(gateTool.description).toContain("confidenceFrom");
   });
 
   it("answers a jev_judge call end to end", async () => {

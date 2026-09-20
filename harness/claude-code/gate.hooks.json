@@ -1,4 +1,7 @@
 {
+  "env": {
+    "JEV_GATE_STATE": "production credentials exist in the environment"
+  },
   "hooks": {
     "PreToolUse": [
       {

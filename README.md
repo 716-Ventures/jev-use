@@ -4,12 +4,17 @@
 
 The best way for Claude Code, Codex, and [pi](https://github.com/badlogic/pi-mono)
 to work with [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev):
-hand the tasks that need no text output to Jev — faster steps, fewer
-tokens, tasks done sooner and better.
+hand the steps that need no text output to Jev. When content must be written the
+LLM takes over; when a step is only a decision, Jev executes it.
 
-It makes the LLM and Jev true collaborators: when content needs to be
-written, the LLM takes over; when a step just needs a fast decision, Jev
-executes it.
+What is measured, first-party:
+
+- Gate every shell command through the hook: **zero LLM tokens**, 510x cheaper per blocking decision.
+- Judge bulk items **by reference** — a script pipes the file to the CLI, so the data never enters the context window: 1.45x faster, 1.80x fewer output tokens.
+- Per decision: 24x cheaper than claude-haiku-4.5, 47x than claude-sonnet-5 — a **rate** win, on tokens Jev spends more.
+- What does **not** pay: pasting that bulk payload through the MCP tool by hand — measured dearer than just deciding it yourself.
+
+The rule behind all four: what saves is the decision leaving the conversation.
 
 ## Demos — real runs, 1× speed
 
@@ -64,7 +69,7 @@ const { answers } = await jev.judge(state, {
   risk: rate("How risky?", ["routine", "worth a look", "incident"]),
   passed: check("Did the run fully succeed?"),
 });
-// answers.next → { answer: "merge", confidence: 0.93, escalate: false }
+// answers.next → { answer: "merge", confidence: 0.93, confidenceFrom: "reported", escalate: false }
 ```
 
 Anything Jev can't or shouldn't decide comes back with `escalate: true`
@@ -83,6 +88,7 @@ and a typed reason. Tools, verdict shape, escalation contract, CLI:
 | [src/server.ts](src/server.ts) | The two MCP tools |
 | [src/cli.ts](src/cli.ts) | `install`, `serve`, `hook gate`, `doctor` |
 | [skills/jev-use/SKILL.md](skills/jev-use/SKILL.md) | The routing rules the agent follows |
+| [evals/](evals) | Four eval cases that check an agent actually routes that way |
 
 ## Development
 
@@ -90,6 +96,7 @@ and a typed reason. Tools, verdict shape, escalation contract, CLI:
 $ npm run typecheck && npm test    # unit tests incl. per-provider wire fixtures
 $ npm run smoke                    # real MCP client ↔ built CLI over stdio
 $ node bench/run.mjs               # micro-benchmarks, your key and region
+$ evals/run.sh                     # routing eval suite (needs `claude plugin eval`)
 ```
 
 Substantially written with Claude Code (AI-assisted).

@@ -53,3 +53,8 @@ Codex hooks are Claude-shaped, so the same adapter works. In
 
 Codex requires you to review and trust non-managed hooks via `/hooks`
 before they run.
+
+The adapter reads the same two env vars here — `JEV_GATE_THRESHOLD` and
+`JEV_GATE_STATE` (facts the hook event cannot carry, appended to every judged
+state) — exported in the environment Codex runs in. See
+[the Claude Code notes](../claude-code/README.md#optional-zero-token-pretooluse-gate).

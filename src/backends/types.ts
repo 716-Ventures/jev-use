@@ -15,7 +15,12 @@ export interface RawAnswer {
   distribution?: Record<string, number>;
   /** score: index → level description, if the provider echoes it. */
   legend?: Record<string, string>;
-  /** Provider-reported confidence in [0,1], if any. */
+  /**
+   * The confidence the PROVIDER itself reported, in [0,1] — set it only when
+   * the response actually carried one. Its presence is what makes a verdict's
+   * `confidenceFrom` "reported"; when it is absent the engine estimates the
+   * confidence from the distribution and says so.
+   */
   confidence?: number;
 }
 
@@ -40,13 +45,6 @@ export interface BackendResponse {
 export interface JevBackend {
   /** Short id, surfaced in results: "typesafe" | "openrouter" | ... */
   readonly name: string;
-  /**
-   * Escalation threshold matched to this backend's confidence semantics.
-   * Margin-fallback confidence (top minus runner-up) is a systematically
-   * smaller quantity than a vendor confidence head, so backends that
-   * reconstruct confidence run a lower default. Unset = protocol default.
-   */
-  readonly defaultConfidenceThreshold?: number;
   judge(request: BackendRequest): Promise<BackendResponse>;
 }
 

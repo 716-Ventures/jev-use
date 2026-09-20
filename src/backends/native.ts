@@ -100,7 +100,13 @@ export function parseNativeAnswers(
     }
     switch (question.type) {
       case "noul":
-        return { answer: numberOrThrow(backend, question.id, answer.noul) };
+        // No noul answer observed so far carries a confidence — Jev's head is
+        // reported for choice/score only. Pass one through if it ever appears
+        // rather than silently estimating over it.
+        return {
+          answer: numberOrThrow(backend, question.id, answer.noul),
+          confidence: answer.confidence,
+        };
       case "choice":
         return {
           answer: stringOrThrow(backend, question.id, answer.choice),

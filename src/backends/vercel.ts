@@ -2,9 +2,12 @@
  * Vercel AI Gateway backend. A genuinely different dialect:
  * POST https://ai-gateway.vercel.sh/v4/ai/evaluation-model with the model
  * in a HEADER (ai-model-id), `noul` renamed to `boolean` (answer field
- * `probability`), camelCase usage, and NO confidence/legend passthrough —
- * confidence is reconstructed from the distribution margin downstream.
- * Wire shapes verified against @ai-sdk/gateway dist source (2026-09).
+ * `probability`), camelCase usage, no legend echo, and Jev's confidence head
+ * relayed out-of-band in `providerMetadata.typesafe.confidence` — a map keyed
+ * by question id that carries `choice` and `score` answers and omits `boolean`
+ * ones, so a mixed batch comes back part reported, part estimated.
+ * Wire shapes verified against @ai-sdk/gateway dist source and 283 live
+ * responses (2026-09-19).
  */
 
 import { optionEntries, type Question, type State } from "../protocol.js";
@@ -73,19 +76,12 @@ interface GatewayAnswer {
 interface GatewayResponse {
   answers?: Record<string, GatewayAnswer>;
   usage?: { inputTokens?: number; outputTokens?: number };
+  /** Provider-namespaced extras; Jev's confidence head arrives here. */
+  providerMetadata?: { typesafe?: { confidence?: Record<string, number> } };
 }
 
 export class VercelBackend implements JevBackend {
   readonly name = "vercel";
-
-  /**
-   * The gateway returns no confidence field, so confidence here is the
-   * distribution margin — live probes (bench/RESULTS.md) show decisive
-   * answers landing at margins 0.5–1.0 where a vendor head reads ~0.9, so
-   * the vendor-calibrated 0.75 default over-escalates. 0.4 = the winner
-   * leads the runner-up by 40 points.
-   */
-  readonly defaultConfidenceThreshold = 0.4;
 
   constructor(private readonly options: VercelOptions) {}
 
@@ -111,6 +107,11 @@ export class VercelBackend implements JevBackend {
       this.options,
     )) as GatewayResponse;
 
+    const reported = response.providerMetadata?.typesafe?.confidence ?? {};
+    /** Only a number counts as reported; a missing id means "estimate it". */
+    const confidenceOf = (id: string): number | undefined =>
+      typeof reported[id] === "number" ? reported[id] : undefined;
+
     const answers: RawAnswer[] = request.questions.map((question) => {
       const answer = response.answers?.[question.id];
       if (!answer) {
@@ -127,17 +128,26 @@ export class VercelBackend implements JevBackend {
               `answer "${question.id}" has no probability`,
             );
           }
+          // The confidence map omits boolean answers: nothing to read here.
           return { answer: answer.probability };
         case "choice":
           if (typeof answer.choice !== "string") {
             throw new BackendError(this.name, `answer "${question.id}" has no choice`);
           }
-          return { answer: answer.choice, distribution: answer.probabilities };
+          return {
+            answer: answer.choice,
+            distribution: answer.probabilities,
+            confidence: confidenceOf(question.id),
+          };
         case "score":
           if (typeof answer.score !== "number") {
             throw new BackendError(this.name, `answer "${question.id}" has no score`);
           }
-          return { answer: answer.score, distribution: answer.probabilities };
+          return {
+            answer: answer.score,
+            distribution: answer.probabilities,
+            confidence: confidenceOf(question.id),
+          };
       }
     });
 

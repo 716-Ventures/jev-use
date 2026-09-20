@@ -17,8 +17,8 @@ import {
   screenQuestions,
 } from "./dispatch.js";
 import {
-  DEFAULT_CONFIDENCE_THRESHOLD,
   serializeState,
+  type ConfidenceSource,
   type GateRequest,
   type GateResult,
   type JudgeRequest,
@@ -36,13 +36,7 @@ export async function judge(
   backend: JevBackend,
   request: JudgeRequest,
 ): Promise<JudgeResult> {
-  const threshold =
-    request.confidenceThreshold ??
-    backend.defaultConfidenceThreshold ??
-    DEFAULT_CONFIDENCE_THRESHOLD;
-  const screened = screenQuestions(request.state, request.questions, {
-    confidenceThreshold: threshold,
-  });
+  const screened = screenQuestions(request.state, request.questions);
 
   const verdicts: Verdict[] = new Array(request.questions.length);
   for (const handedBack of screened.handedBack) {
@@ -68,7 +62,9 @@ export async function judge(
         const verdict = raw
           ? toVerdict(question, raw)
           : missingAnswerVerdict(question, backend.name);
-        verdicts[index] = escalateIfUnsure(verdict, threshold);
+        // No explicit threshold means no single number: each verdict is judged
+        // against the one for its own confidence source.
+        verdicts[index] = escalateIfUnsure(verdict, request.confidenceThreshold);
       });
     } catch (error) {
       const message =
@@ -97,7 +93,11 @@ export async function judge(
   };
 }
 
-/** Shape one backend answer as a verdict, filling in confidence per primitive. */
+/**
+ * Shape one backend answer as a verdict, filling in confidence per primitive —
+ * and, with it, where that confidence came from. Any provider-reported number
+ * wins; otherwise the answer's own distribution is the only signal there is.
+ */
 function toVerdict(question: IdentifiedQuestion, raw: RawAnswer): Verdict {
   switch (question.type) {
     case "noul": {
@@ -106,7 +106,7 @@ function toVerdict(question: IdentifiedQuestion, raw: RawAnswer): Verdict {
         id: question.id,
         type: question.type,
         answer: probability,
-        confidence: raw.confidence ?? certainty(probability),
+        ...confidenceOf(raw, certainty(probability)),
         escalate: false,
       };
     }
@@ -117,7 +117,7 @@ function toVerdict(question: IdentifiedQuestion, raw: RawAnswer): Verdict {
         type: question.type,
         answer: String(raw.answer),
         distribution,
-        confidence: raw.confidence ?? fallbackConfidence(distribution),
+        ...confidenceOf(raw, estimateFrom(distribution)),
         escalate: false,
       };
     }
@@ -133,15 +133,28 @@ function toVerdict(question: IdentifiedQuestion, raw: RawAnswer): Verdict {
           Object.fromEntries(
             (question.levels ?? []).map((level, index) => [String(index), level]),
           ),
-        confidence: raw.confidence ?? fallbackConfidence(distribution),
+        ...confidenceOf(raw, estimateFrom(distribution)),
         escalate: false,
       };
     }
   }
 }
 
-/** Confidence for backends that report none: the distribution's own margin. */
-function fallbackConfidence(distribution?: Record<string, number>): number {
+/**
+ * The confidence a verdict carries and its provenance: what the provider
+ * reported, else what this primitive can estimate from its own distribution.
+ */
+function confidenceOf(
+  raw: RawAnswer,
+  estimated: number,
+): { confidence: number; confidenceFrom: ConfidenceSource } {
+  return raw.confidence !== undefined
+    ? { confidence: raw.confidence, confidenceFrom: "reported" }
+    : { confidence: estimated, confidenceFrom: "estimated" };
+}
+
+/** Estimate from a choice/score distribution: its own top-vs-runner-up margin. */
+function estimateFrom(distribution?: Record<string, number>): number {
   return distribution ? margin(distribution) : 0;
 }
 
@@ -212,6 +225,7 @@ export async function gate(
   return {
     decision,
     confidence: verdict.confidence,
+    confidenceFrom: verdict.confidenceFrom,
     reason: verdict.reason,
     distribution: verdict.distribution,
     hint: verdict.hint,

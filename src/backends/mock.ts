@@ -2,6 +2,11 @@
  * Deterministic mock backend: lets the MCP server, tests, and demos run
  * with no API key. Answers are derived from a stable hash of state +
  * question, so runs are reproducible; scripted answers can be injected.
+ *
+ * It mirrors the real providers' confidence provenance rather than inventing
+ * one: `choice`/`score` answers carry a confidence field (so their verdicts
+ * read `confidenceFrom: "reported"`), `noul` answers carry none (so theirs
+ * read `"estimated"`, computed from the probability).
  */
 
 import { optionEntries, serializeState } from "../protocol.js";

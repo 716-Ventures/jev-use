@@ -44,8 +44,9 @@ export interface JevOptions {
   /** Environment consulted while resolving the backend. Default `process.env`. */
   env?: Record<string, string | undefined>;
   /**
-   * Escalate verdicts below this confidence. Default: the backend's own
-   * threshold (0.75, or 0.4 for the Vercel gateway's margin semantics).
+   * Escalate verdicts below this confidence, whatever its source. Default: the
+   * threshold for each verdict's own `confidenceFrom` — 0.5 for a confidence
+   * the model reported, 0.4 for one estimated off the distribution.
    */
   confidenceThreshold?: number;
   /** Model id to send with every call, e.g. "jev-latest". Default: the backend's. */

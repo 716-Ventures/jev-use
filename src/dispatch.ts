@@ -9,7 +9,7 @@
  */
 
 import {
-  DEFAULT_CONFIDENCE_THRESHOLD,
+  confidenceThresholdFor,
   DEFAULT_MAX_STATE_TOKENS,
   defaultQuestionId,
   estimateTokens,
@@ -24,8 +24,6 @@ import {
 export interface ScreenLimits {
   /** Hand back the batch when the serialized state exceeds this. Default 30k. */
   maxStateTokens?: number;
-  /** Escalate answers below this confidence. Default 0.75. */
-  confidenceThreshold?: number;
 }
 
 /** One question handed back before the call, with the verdict that says why. */
@@ -171,19 +169,25 @@ export function whyUnaskable(question: Question): string | null {
 /**
  * After the call: given a verdict Jev produced, decide whether the LLM should
  * take over anyway because the answer is too uncertain to act on.
+ *
+ * With no `override`, each verdict is judged against the threshold for its own
+ * confidence source — a reported head and an estimate off the distribution are
+ * different quantities, so one number cannot serve both. An override applies to
+ * every verdict as written, whatever its source: the caller asked for a number.
  */
-export function escalateIfUnsure(
-  verdict: Verdict,
-  threshold: number = DEFAULT_CONFIDENCE_THRESHOLD,
-): Verdict {
+export function escalateIfUnsure(verdict: Verdict, override?: number): Verdict {
   if (verdict.escalate) return verdict; // already handed back upstream
+  // A verdict that reached this point came from a backend answer, so it carries
+  // a source; the fallback is the conservative one.
+  const source = verdict.confidenceFrom ?? "estimated";
+  const threshold = override ?? confidenceThresholdFor(source);
   if (verdict.confidence >= threshold) return verdict;
   return {
     ...verdict,
     escalate: true,
     reason: "unsure",
     hint:
-      `Jev answered (${formatAnswer(verdict)}) at confidence ` +
+      `Jev answered (${formatAnswer(verdict)}) at ${source} confidence ` +
       `${verdict.confidence.toFixed(2)} < ${threshold}. Treat the answer as a ` +
       `prior, not a decision — reason it out yourself.`,
   };
@@ -207,8 +211,17 @@ function round4(value: number): number {
 }
 
 /**
- * Fallback confidence for a distribution when the backend gives none:
- * the margin between the winner and the runner-up.
+ * Estimated confidence for a distribution when the provider reports none: the
+ * margin between the winner and the runner-up. On a two-option question this
+ * is exactly what Jev's own confidence head returns (measured: 168 live
+ * answers, |difference| ≤ 0.01 = the wire's 2-decimal rounding); on three or
+ * more it reads a median 0.05 lower, which is why the estimated threshold sits
+ * below the reported one.
+ *
+ * Reading the top probability instead (rescaled to `(p_top − 1/n)/(1 − 1/n)`)
+ * would match the reported head exactly for `choice` — but not for `score`
+ * past two levels, where the head can sit ABOVE `p_top`. That is why this stays
+ * a second quantity with its own threshold (bench/RESULTS.md).
  */
 export function margin(distribution: Record<string, number>): number {
   const sorted = Object.values(distribution).sort((a, b) => b - a);

@@ -16,7 +16,11 @@
 import { createBackend } from "../../src/backends/index.js";
 import type { JevBackend } from "../../src/backends/types.js";
 import { gate, judge } from "../../src/judge.js";
-import type { Question } from "../../src/protocol.js";
+import {
+  ESTIMATED_CONFIDENCE_THRESHOLD,
+  REPORTED_CONFIDENCE_THRESHOLD,
+  type Question,
+} from "../../src/protocol.js";
 
 // Structural slice of pi's ExtensionAPI — avoids a hard dependency on the
 // pi package name from inside an extension file.
@@ -109,7 +113,10 @@ export default function (pi: PiExtensionAPI): void {
         questions: { type: "array", items: questionSchema, minItems: 1 },
         confidence_threshold: {
           type: "number",
-          description: "Escalate below this confidence. Default 0.75.",
+          description:
+            `Escalate below this confidence. Unset: ${REPORTED_CONFIDENCE_THRESHOLD} for a ` +
+            `confidence the model reported, ${ESTIMATED_CONFIDENCE_THRESHOLD} for one jev-use ` +
+            "estimated from the answer's distribution (each verdict says which, in confidenceFrom).",
         },
       },
       required: ["state", "questions"],
@@ -133,7 +140,7 @@ export default function (pi: PiExtensionAPI): void {
     label: "Jev gate",
     description:
       "Risk-check one proposed action against the current state in ~100ms. " +
-      "Returns {decision: allow|deny|escalate, confidence, hint}.",
+      "Returns {decision: allow|deny|escalate, confidence, confidenceFrom, hint}.",
     parameters: {
       type: "object",
       properties: {

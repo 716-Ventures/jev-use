@@ -161,6 +161,19 @@ describe("TypeSafeBackend", () => {
     expect(res.answers[0].answer).toBe(0.9);
   });
 
+  /**
+   * No noul answer observed on any provider carries a confidence — the head is
+   * reported for choice/score only, which is why a `check` verdict always reads
+   * `confidenceFrom: "estimated"`. The parser still relays one if it appears,
+   * rather than silently estimating over the provider's own number.
+   */
+  it("relays a noul confidence if the provider ever sends one", async () => {
+    mockFetchOnce(200, { answers: { is_bug: { type: "noul", noul: 0.96, confidence: 0.9 } } });
+    const backend = new TypeSafeBackend({ apiKey: "sk-test" });
+    const res = await backend.judge({ state: "s", questions: [questions[0]] });
+    expect(res.answers[0]).toEqual({ answer: 0.96, confidence: 0.9 });
+  });
+
   it("errors when the response is missing an answer", async () => {
     mockFetchOnce(200, { answers: {} });
     const backend = new TypeSafeBackend({ apiKey: "sk-test" });
@@ -191,6 +204,32 @@ describe("OpenRouterBackend", () => {
   });
 });
 
+/**
+ * Recorded verbatim from https://ai-gateway.vercel.sh/v4/ai/evaluation-model on
+ * 2026-09-19 (generation gen_01M2XRRFYM5NKNPGHCDZ2NH1V0), for exactly the three
+ * questions above. Note the two things the dialect does out-of-band: Jev's
+ * confidence head arrives under `providerMetadata.typesafe.confidence`, keyed by
+ * question id — and the `boolean` answer is simply absent from that map.
+ */
+const recordedGatewayResponse = {
+  answers: {
+    is_bug: { type: "boolean", probability: 0.97 },
+    team: { type: "choice", choice: "payments", probabilities: { frontend: 0.04, payments: 0.96 } },
+    urgency: { type: "score", score: 2, probabilities: { "0": 0, "1": 0, "2": 1 } },
+  },
+  rounding: { probabilityDecimals: 2, scoreDecimals: 2 },
+  usage: { inputTokens: 413, outputTokens: 63 },
+  warnings: [],
+  providerMetadata: {
+    typesafe: { confidence: { team: 0.92, urgency: 1 } },
+    gateway: {
+      cost: "0",
+      marketCost: "0.000017346",
+      generationId: "gen_01M2XRRFYM5NKNPGHCDZ2NH1V0",
+    },
+  },
+};
+
 describe("VercelBackend", () => {
   it("speaks the gateway dialect: model header, boolean type, probability field", async () => {
     const { calls } = mockFetchOnce(200, {
@@ -215,12 +254,44 @@ describe("VercelBackend", () => {
     expect(body.questions.is_bug.type).toBe("boolean");
     expect(body.questions.urgency.criteria).toEqual(["Can wait", "This week", "Blocking revenue"]);
 
-    // noul comes back as probability; confidence is absent by design here
+    // A response with no providerMetadata at all: nothing is reported, so every
+    // answer comes back for the engine to estimate from its distribution.
     expect(res.answers[0]).toEqual({ answer: 0.96 });
     expect(res.answers[1]).toEqual({
       answer: "payments",
       distribution: { frontend: 0.16, payments: 0.84 },
+      confidence: undefined,
     });
     expect(res.usage).toEqual({ inputTokens: 476, outputTokens: 0 });
+  });
+
+  it("reads Jev's confidence head out of providerMetadata, per question id", async () => {
+    mockFetchOnce(200, recordedGatewayResponse);
+    const backend = new VercelBackend({ apiKey: "vc-test" });
+    const res = await backend.judge({ state: "ticket text", questions });
+
+    // boolean: no entry in the confidence map, so no reported confidence
+    expect(res.answers[0]).toEqual({ answer: 0.97 });
+    // choice and score: the head, keyed by the question's own id
+    expect(res.answers[1]).toEqual({
+      answer: "payments",
+      distribution: { frontend: 0.04, payments: 0.96 },
+      confidence: 0.92,
+    });
+    expect(res.answers[2]).toEqual({
+      answer: 2,
+      distribution: { "0": 0, "1": 0, "2": 1 },
+      confidence: 1,
+    });
+  });
+
+  it("ignores a confidence entry that is not a number", async () => {
+    mockFetchOnce(200, {
+      ...recordedGatewayResponse,
+      providerMetadata: { typesafe: { confidence: { team: null } } },
+    });
+    const backend = new VercelBackend({ apiKey: "vc-test" });
+    const res = await backend.judge({ state: "ticket text", questions });
+    expect(res.answers[1].confidence).toBeUndefined();
   });
 });

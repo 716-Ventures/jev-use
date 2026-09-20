@@ -13,6 +13,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { gate, judge } from "./judge.js";
+import {
+  ESTIMATED_CONFIDENCE_THRESHOLD,
+  REPORTED_CONFIDENCE_THRESHOLD,
+} from "./protocol.js";
 import type { JevBackend } from "./backends/types.js";
 
 export const SERVER_NAME = "jev-use";
@@ -60,13 +64,24 @@ export function createServer(backend: JevBackend): McpServer {
       title: "Batch fast judgments with Jev",
       description:
         "Hand a batch of quick judgment questions to Jev (TypeSafe AI's System One model): " +
-        "~70-500ms, ~100x cheaper than reasoning them out yourself, calibrated probabilities. " +
-        "Use it whenever the next step is a JUDGMENT you could answer from context — did X succeed, " +
-        "which option next, how good is Y — not a generation. Batch every question you have about " +
-        "one state into ONE call (batching is where the speedup comes from). " +
+        "measured p50 257ms and $0.000032 per decision — 24x cheaper per decision than " +
+        "claude-haiku-4.5 and 47x cheaper than claude-sonnet-5. That is a RATE win, not a token " +
+        "win: Jev spends more tokens per decision, not fewer, so it only pays when the decision " +
+        "leaves your conversation. " +
+        "Use it whenever the next step is a JUDGMENT over facts you ALREADY have in context — did X " +
+        "succeed, which option next, how good is Y — not a generation. Batch every question you " +
+        "have about one state into ONE call (batching is where the speedup comes from). " +
+        "Do NOT paste bulk data in here: if the items to judge are sitting in a file or in tool " +
+        "output, pipe that file to the `jev-use judge` CLI from the shell instead, so the data " +
+        "never passes through this conversation — measured on 90 items, pushing them through this " +
+        "tool by hand cost 1.66x MORE money than deciding them yourself, while the by-reference " +
+        "CLI route was 1.45x faster. Routing only the few items you genuinely cannot settle is " +
+        "the other route that pays. " +
         "Do NOT use it for anything that needs new text/code written, or choices whose options you " +
         "cannot enumerate — that work is yours. " +
-        "Each verdict returns {answer, confidence, escalate, reason, hint}. escalate=true means the " +
+        "Each verdict returns {answer, confidence, confidenceFrom, escalate, reason, hint}. " +
+        "confidenceFrom says where the number came from: \"reported\" = Jev's own confidence head, " +
+        "\"estimated\" = worked out by jev-use from the answer's distribution. escalate=true means the " +
         "question is handed back to you: writing/open_ended = structurally yours, " +
         "oversized = the state is too big to judge, " +
         "unsure = Jev's answer is only a prior (it is still included) — decide yourself, " +
@@ -76,7 +91,9 @@ export function createServer(backend: JevBackend): McpServer {
           .string()
           .describe(
             "The shared context/environment both parties judge against: relevant facts, recent tool " +
-            "output, file excerpts. Serialize objects to JSON. Keep it under ~30k tokens.",
+            "output, file excerpts — facts you ALREADY have. Serialize objects to JSON. Keep it " +
+            "under ~30k tokens, and never read a file into your context just to paste it here: " +
+            "pipe the file to `jev-use judge` from the shell instead.",
           ),
         questions: z
           .array(questionShape)
@@ -88,7 +105,11 @@ export function createServer(backend: JevBackend): McpServer {
           .max(1)
           .optional()
           .describe(
-            "Escalate verdicts below this confidence. Default 0.75 (0.4 via the Vercel gateway, whose confidence is a margin fallback).",
+            // Built from the constants the engine applies, never retyped: this
+            // string said "Default 0.75" while calls escalated below 0.4.
+            `Escalate verdicts below this confidence. Unset: ${REPORTED_CONFIDENCE_THRESHOLD} for a ` +
+              `confidence Jev reported, ${ESTIMATED_CONFIDENCE_THRESHOLD} for one jev-use estimated ` +
+              "from the answer's distribution (each verdict says which, in confidenceFrom).",
           ),
         model: z.string().optional().describe("Backend model override, e.g. jev-latest."),
       },
@@ -101,7 +122,7 @@ export function createServer(backend: JevBackend): McpServer {
         model,
       });
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result) }],
       };
     },
   );
@@ -111,11 +132,13 @@ export function createServer(backend: JevBackend): McpServer {
     {
       title: "Gate an action with Jev",
       description:
-        "Ask Jev to risk-check one proposed agent action against the current state in a single " +
-        "~100ms call. Returns {decision: allow|deny|escalate, confidence, hint}. " +
+        "Ask Jev to risk-check ONE proposed agent action against the current state in a single " +
+        "sub-second call. Returns {decision: allow|deny|escalate, confidence, confidenceFrom, hint}. " +
         "escalate means Jev is not sure enough either way — judge the action yourself. " +
-        "Designed to be wired into harness hooks (PreToolUse) so gating costs zero LLM tokens; " +
-        "calling it explicitly before a risky/irreversible action also works.",
+        "Use this by hand only for a one-off risky/irreversible action. If gating is per-tool-call " +
+        "and repeats, do not call this every turn: wire `jev-use hook gate` as a PreToolUse hook " +
+        "once and the decision leaves the conversation entirely — measured, 24 gated commands cost " +
+        "17.1s and ZERO LLM tokens through the hook, vs 46.9s and $0.2366 through a supervisor LLM.",
       inputSchema: {
         state: z
           .string()
@@ -138,7 +161,7 @@ export function createServer(backend: JevBackend): McpServer {
         model,
       });
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result) }],
       };
     },
   );

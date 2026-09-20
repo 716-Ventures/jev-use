@@ -27,6 +27,7 @@ export type { Step, StepRoute } from "./dispatch.js";
 export type {
   AnswerOf,
   ChoiceQuestion,
+  ConfidenceSource,
   EscalationReason,
   GateAction,
   GateDecision,

@@ -10,6 +10,7 @@ import type {
   BackendRequest,
   BackendResponse,
   JevBackend,
+  RawAnswer,
 } from "../src/backends/types.js";
 import { BackendError } from "../src/backends/types.js";
 import { gate, judge } from "../src/judge.js";
@@ -54,8 +55,10 @@ describe("judge", () => {
     const [pass, next, quality] = res.verdicts;
     expect(pass.answer).toBe(0.97);
     expect(pass.confidence).toBeCloseTo(0.94); // 2·|0.97−0.5|
+    expect(pass.confidenceFrom).toBe("estimated"); // noul reports none
     expect(next.answer).toBe("commit");
     expect(next.confidence).toBe(0.9);
+    expect(next.confidenceFrom).toBe("reported"); // one batch, both sources
     expect(quality.answer).toBe(2.7);
     expect(quality.legend).toEqual({
       "0": "broken",
@@ -126,38 +129,99 @@ describe("judge", () => {
     expect(lax.verdicts[0].escalate).toBe(false);
   });
 
-  it("uses the backend's default threshold when the request has none", async () => {
-    // Margin-confidence backends (Vercel) declare a lower default; a
-    // decisive margin of 0.5 must not escalate there, but still does under
-    // the protocol default and under an explicit stricter threshold.
-    const marginBackend: JevBackend = {
-      name: "margin-mock",
-      defaultConfidenceThreshold: 0.4,
-      judge: async (req: BackendRequest): Promise<BackendResponse> => ({
-        answers: req.questions.map(() => ({
-          answer: "merge",
-          distribution: { merge: 0.75, hold: 0.25 },
-        })),
-      }),
-    };
-    const question = [
-      {
-        id: "q",
-        type: "choice" as const,
-        question: "next?",
-        options: { merge: "m", hold: "h" },
-      },
-    ];
-    const byDefault = await judge(marginBackend, { state, questions: question });
-    expect(byDefault.verdicts[0].confidence).toBe(0.5);
-    expect(byDefault.verdicts[0].escalate).toBe(false);
-
-    const explicit = await judge(marginBackend, {
-      state,
-      questions: question,
-      confidenceThreshold: 0.75,
+  /**
+   * The threshold follows the confidence's SOURCE, not the backend. One
+   * response can carry both kinds — Jev reports a confidence head for
+   * choice/score and none for noul — so these four cases are the contract:
+   * a reported number is taken as given and judged at 0.5; an absent one is
+   * estimated from the answer's own distribution and judged at 0.4.
+   */
+  describe("confidence provenance decides the threshold", () => {
+    /** One backend, one answer per question, exactly as scripted. */
+    const scripted = (answers: RawAnswer[]): JevBackend => ({
+      name: "scripted",
+      judge: async (_req: BackendRequest): Promise<BackendResponse> => ({ answers }),
     });
-    expect(explicit.verdicts[0].escalate).toBe(true);
+    const choice = [
+      { id: "q", type: "choice" as const, question: "next?", options: { merge: "m", hold: "h" } },
+    ];
+    const noul = [{ id: "q", type: "noul" as const, question: "green?" }];
+
+    it("takes a choice answer's reported confidence over the margin", async () => {
+      const res = await judge(
+        scripted([{ answer: "merge", distribution: { merge: 0.7, hold: 0.3 }, confidence: 0.55 }]),
+        { state, questions: choice },
+      );
+      const [v] = res.verdicts;
+      expect(v.confidence).toBe(0.55); // reported, not the 0.4 margin
+      expect(v.confidenceFrom).toBe("reported");
+      expect(v.escalate).toBe(false); // 0.55 >= 0.5, the reported threshold
+    });
+
+    it("estimates a choice answer from the margin when none is reported", async () => {
+      const res = await judge(
+        scripted([{ answer: "merge", distribution: { merge: 0.7, hold: 0.3 } }]),
+        { state, questions: choice },
+      );
+      const [v] = res.verdicts;
+      expect(v.confidence).toBe(0.4); // 0.7 − 0.3
+      expect(v.confidenceFrom).toBe("estimated");
+      expect(v.escalate).toBe(false); // 0.4 >= 0.4, the estimated threshold
+    });
+
+    it("falls back to the estimated margin for a noul answer, which reports none", async () => {
+      const res = await judge(scripted([{ answer: 0.72 }]), { state, questions: noul });
+      const [v] = res.verdicts;
+      expect(v.confidence).toBeCloseTo(0.44); // 2·|0.72 − 0.5|
+      expect(v.confidenceFrom).toBe("estimated");
+      expect(v.escalate).toBe(false); // 0.44 >= 0.4, but below the reported 0.5
+    });
+
+    it("applies each threshold by provenance, on identical numbers", async () => {
+      // 0.45 escalates as a reported confidence (< 0.5) and stands as an
+      // estimated one (>= 0.4) — the whole point of carrying the source.
+      const reported = await judge(
+        scripted([{ answer: "merge", distribution: { merge: 0.9, hold: 0.1 }, confidence: 0.45 }]),
+        { state, questions: choice },
+      );
+      expect(reported.verdicts[0].escalate).toBe(true);
+      expect(reported.verdicts[0].reason).toBe("unsure");
+      expect(reported.verdicts[0].hint).toContain("reported confidence 0.45 < 0.5");
+
+      const estimated = await judge(
+        scripted([{ answer: "merge", distribution: { merge: 0.725, hold: 0.275 } }]),
+        { state, questions: choice },
+      );
+      expect(estimated.verdicts[0].confidence).toBe(0.45);
+      expect(estimated.verdicts[0].escalate).toBe(false);
+    });
+
+    it("an explicit threshold wins over both defaults", async () => {
+      const strict = await judge(
+        scripted([{ answer: "merge", distribution: { merge: 0.9, hold: 0.1 }, confidence: 0.8 }]),
+        { state, questions: choice, confidenceThreshold: 0.9 },
+      );
+      expect(strict.verdicts[0].confidenceFrom).toBe("reported");
+      expect(strict.verdicts[0].escalate).toBe(true);
+
+      const lax = await judge(
+        scripted([{ answer: "merge", distribution: { merge: 0.55, hold: 0.45 } }]),
+        { state, questions: choice, confidenceThreshold: 0.05 },
+      );
+      expect(lax.verdicts[0].confidenceFrom).toBe("estimated");
+      expect(lax.verdicts[0].confidence).toBeCloseTo(0.1);
+      expect(lax.verdicts[0].escalate).toBe(false);
+    });
+
+    it("leaves the source off a question that never reached Jev", async () => {
+      const res = await judge(scripted([]), {
+        state,
+        questions: [{ id: "free", type: "choice", question: "Write a commit message" }],
+      });
+      expect(res.verdicts[0].reason).toBe("open_ended");
+      expect(res.verdicts[0].confidence).toBe(0);
+      expect(res.verdicts[0].confidenceFrom).toBeUndefined();
+    });
   });
 });
 

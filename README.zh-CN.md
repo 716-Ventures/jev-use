@@ -4,11 +4,17 @@
 
 Claude Code / Codex / [pi](https://github.com/badlogic/pi-mono) 与
 [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
-的最佳协作方式:把不需要输出内容的任务交给 Jev——加速任务、减少 token
-消耗,更快更好地完成任务。
+的最佳协作方式:把不需要输出内容的步骤交给 Jev。需要输出内容时,LLM
+接管;某一步只是一个判断时,交给 Jev 执行。
 
-它让 LLM 与 Jev 真正协作:需要输出内容时,LLM 接管;不需要内容、只要快速执行时,交给
-Jev。
+第一方实测的结论:
+
+- 用 hook 把关每一条 shell 命令:**零 LLM token**,每次阻塞式决策便宜 510 倍。
+- 批量条目**按引用**判断——脚本把文件管道给 CLI,数据不进上下文窗口:快 1.45 倍,输出 token 少 1.80 倍。
+- 单次决策:比 claude-haiku-4.5 便宜 24 倍、比 claude-sonnet-5 便宜 47 倍——赢在**单价**,token 上 Jev 花得更多。
+- 不划算的做法:把这批数据手工粘进 MCP 工具——实测比自己判断还贵。
+
+四条背后是同一条规则:省下来的,是决策离开了对话本身。
 
 ## 演示——真实运行,1× 速度
 
@@ -59,7 +65,7 @@ const { answers } = await jev.judge(state, {
   risk: rate("How risky?", ["routine", "worth a look", "incident"]),
   passed: check("Did the run fully succeed?"),
 });
-// answers.next → { answer: "merge", confidence: 0.93, escalate: false }
+// answers.next → { answer: "merge", confidence: 0.93, confidenceFrom: "reported", escalate: false }
 ```
 
 Jev 拍不了板的判决会带着 `escalate: true`
@@ -77,6 +83,7 @@ Jev 拍不了板的判决会带着 `escalate: true`
 | [src/server.ts](src/server.ts) | 两个 MCP 工具 |
 | [src/cli.ts](src/cli.ts) | `install`、`serve`、`hook gate`、`doctor` |
 | [skills/jev-use/SKILL.md](skills/jev-use/SKILL.md) | agent 遵循的路由规则 |
+| [evals/](evals) | 四个 eval 用例，检验 agent 真的按这套路由走 |
 
 ## 开发
 
@@ -84,6 +91,7 @@ Jev 拍不了板的判决会带着 `escalate: true`
 $ npm run typecheck && npm test    # 单元测试，含各供应商线上格式 fixture
 $ npm run smoke                    # 真实 MCP 客户端 ↔ 构建产物 CLI，走 stdio
 $ node bench/run.mjs               # 微基准，用你的 key 和网络
+$ evals/run.sh                     # 路由 eval 套件（需要 `claude plugin eval`）
 ```
 
 主体由 Claude Code（AI 辅助）编写。

@@ -16,7 +16,7 @@ question count ([measured](https://github.com/Nyarlathoteppppp/pi-heed/blob/main
 | `questions[].options` | choice only | ≥ 2 labels, or a `label → meaning` map |
 | `questions[].levels` | score only | ≥ 2 ordered level descriptions |
 | `questions[].criteria` | noul only, optional | `{true, false}` meanings, to sharpen calibration |
-| `confidence_threshold` | number, default `0.75` (`0.4` via Vercel — margin semantics) | verdicts below it escalate |
+| `confidence_threshold` | number, default per confidence source — `0.5` reported, `0.4` estimated | verdicts below it escalate |
 | `model` | string, optional | backend model override |
 
 ```jsonc
@@ -37,11 +37,14 @@ question count ([measured](https://github.com/Nyarlathoteppppp/pi-heed/blob/main
 // result (shape exact, values illustrative)
 {
   "verdicts": [
-    { "id": "passed", "type": "noul",   "answer": 0.97, "confidence": 0.94, "escalate": false },
-    { "id": "next",  "type": "choice", "answer": "merge", "confidence": 0.34, "escalate": true,
+    { "id": "passed", "type": "noul",   "answer": 0.97, "confidence": 0.94,
+      "confidenceFrom": "estimated", "escalate": false },
+    { "id": "next",  "type": "choice", "answer": "merge", "confidence": 0.34,
+      "confidenceFrom": "reported", "escalate": true,
       "reason": "unsure", "distribution": { "merge": 0.55, "rerun": 0.41, "hold": 0.04 },
-      "hint": "Jev answered (merge) at confidence 0.34 < 0.75. Treat the answer as a prior, not a decision — reason it out yourself." },
-    { "id": "risk",  "type": "score",  "answer": 0.8, "confidence": 0.81, "escalate": false,
+      "hint": "Jev answered (merge) at reported confidence 0.34 < 0.5. Treat the answer as a prior, not a decision — reason it out yourself." },
+    { "id": "risk",  "type": "score",  "answer": 0.8, "confidence": 0.81,
+      "confidenceFrom": "reported", "escalate": false,
       "distribution": { "0": 0.35, "1": 0.5, "2": 0.15 },
       "legend": { "0": "routine", "1": "worth a look", "2": "incident" } }
   ],
@@ -64,9 +67,9 @@ One proposed action, one risk check.
 | `state` | string — current task context |
 | `tool`, `input` | the action, verbatim |
 | `description` | optional intent |
-| `confidence_threshold` | default `0.75` (`0.4` via Vercel) |
+| `confidence_threshold` | default per confidence source (`0.5` reported / `0.4` estimated) |
 
-Returns `{decision: allow | deny | escalate, confidence, hint}` — one
+Returns `{decision: allow | deny | escalate, confidence, confidenceFrom, hint}` — one
 allow/deny `choice` under the hood, `escalate` when confidence falls below
 the threshold. **`allow` stays silent and falls through to your normal
 permission flow — the gate can never grant anything, only deny or ask — and
@@ -78,9 +81,10 @@ the matcher to tools worth gating.
 ## The verdict contract
 
 Every verdict:
-`{id, type, answer, confidence, escalate, reason?, hint?, distribution?, legend?}`.
+`{id, type, answer, confidence, confidenceFrom, escalate, reason?, hint?, distribution?, legend?}`.
 `reason`/`hint` appear exactly when `escalate` is true; `distribution`/`legend`
-whenever the provider returns them.
+whenever the provider returns them; `confidenceFrom` whenever the question
+actually reached Jev.
 
 | reason | when | meaning |
 | --- | --- | --- |
@@ -93,14 +97,27 @@ whenever the provider returns them.
 Pre-call reasons come from a deterministic router (no request spent); each
 handback is a normal verdict with a hint, never an exception.
 
-**What the `confidence` scalar is:** for `choice`/`score` it is the
-provider's own confidence field (an opaque model head, not derivable from
-the distribution) — except through the Vercel gateway, which returns none,
-so jev-use falls back to top-minus-runner-up margin, a different and
-uncalibrated quantity. For `noul` the API reports no confidence, so it is
-computed as certainty, `2·|p − 0.5|`. Because margin runs systematically
-lower than a vendor confidence head, the Vercel backend's default threshold
-is `0.4` (others `0.75`); an explicit `confidence_threshold` always wins.
+**What the `confidence` scalar is, and where it came from.** Every verdict
+says so itself, in `confidenceFrom`:
+
+| `confidenceFrom` | who produced it | escalates below |
+| --- | --- | --- |
+| `reported` | Jev's own confidence head, returned for `choice` and `score` answers | `0.5` |
+| `estimated` | jev-use, from the answer's own distribution: top-minus-runner-up for `choice`/`score`, `2·\|p − 0.5\|` for `noul` | `0.4` |
+
+`noul` answers carry no reported confidence from any provider, so they are
+always `estimated`; one batch mixing `check` with `pick`/`rate` therefore comes
+back part reported, part estimated, and each verdict is judged against its own
+number. Through the Vercel gateway the head arrives out-of-band in
+`providerMetadata.typesafe.confidence`, keyed by question id.
+
+The two are the same scale read two ways, measured over 318 live
+choice/score answers ([bench/RESULTS.md](../bench/RESULTS.md)): on a
+two-option question they agree to the wire's 2-decimal rounding, and on
+three or more the margin reads a median `0.05` (up to `0.17`) lower, because
+it also subtracts however the losing mass splits. Hence the lower bar for
+the estimate. An explicit `confidence_threshold` covers every verdict
+whatever its source, and always wins.
 
 ## Library
 
@@ -114,7 +131,7 @@ const { answers, verdicts } = await jev.judge(state, {
   risk: rate("How risky?", ["routine", "worth a look", "incident"]),
   passed: check("Did the run fully succeed?"),
 });
-answers.next;   // { answer: "merge", confidence: 0.93, escalate: false }
+answers.next;   // { answer: "merge", confidence: 0.93, confidenceFrom: "reported", escalate: false }
 
 const verdict = await jev.gate(state, { tool: "Bash", input: { command } });
 verdict.decision;   // "allow" | "deny" | "escalate"
@@ -153,12 +170,15 @@ are overridable per call: `jev.judge(state, questions, { model })`.
 | `JEV_BACKEND` | auto-detect | `typesafe` \| `openrouter` \| `vercel` \| `mock` |
 | `TYPESAFE_API_KEY` / `OPENROUTER_API_KEY` / `AI_GATEWAY_API_KEY` | — | provider credential; auto-detected in this order |
 | `JEV_MODEL` | provider default (`jev-latest`) | model override |
-| `JEV_GATE_THRESHOLD` | backend default (`0.75`; `0.4` via Vercel) | hook-gate escalation threshold |
+| `JEV_GATE_THRESHOLD` | per confidence source (`0.5` / `0.4`) | hook-gate escalation threshold, for both sources at once |
 
 Provider dialects: TypeSafe and OpenRouter share the native wire shape
-(OpenRouter's `decisions` endpoint is alpha and may move); Vercel's gateway
-renames `noul`→`boolean`, moves the model into a header, and drops
-confidence/legend. All three are normalized by the adapters; wire shapes are
+(OpenRouter's `decisions` endpoint is alpha and may move), carrying
+`confidence` on the answer itself; Vercel's gateway renames `noul`→`boolean`,
+moves the model into a header, drops the `legend` echo, and relays the
+confidence head in `providerMetadata.typesafe.confidence` instead — a map keyed
+by question id, with `boolean` answers absent from it. All three are normalized
+by the adapters, provenance included; wire shapes are
 pinned by fixture tests against documented formats — `jev-use doctor` is the
 live check.
 
