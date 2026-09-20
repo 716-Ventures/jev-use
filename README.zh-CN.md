@@ -24,7 +24,7 @@ Claude Code / Codex / [pi](https://github.com/badlogic/pi-mono) 与
 <td width="50%" valign="top"><b>上下文压缩</b>——200 条消息 7 次调用判完,LLM 一段摘要替换丢弃堆;召回 3/3<br><img src="assets/compact.gif" alt="真实转录把上下文窗口填到 94%;Jev 逐条判留/丢,LLM 的摘要段替换灰色块,窗口降到 44%,三题召回全中" width="100%"></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><b>Pong:球速=决策延迟</b>——20 秒内 Jev 86 次决策,haiku 6 次,gemini 3 次<br><img src="assets/pong.gif" alt="三条 Pong 通道 1× 回放真实运行:Jev 的球以每步约 224ms 来回穿场,LLM 的球缓慢爬行" width="100%"></td>
+<td width="50%" valign="top"><b>Pong:球速=决策延迟</b>——按常规调用时 20 秒内 Jev 86 次决策,haiku 6 次,gemini 3 次;给两个基线都加上 enum 约束后差距是 3×<br><img src="assets/pong.gif" alt="三条 Pong 通道 1× 回放真实运行:Jev 的球以每步约 224ms 来回穿场,LLM 的球缓慢爬行" width="100%"></td>
 <td width="50%" valign="top"><b>把关每条 shell 命令</b>——危险命令约 230 ms 内带理由拒绝,零 LLM token<br><img src="assets/gate.gif" alt="24 条命令的开发会话 1× 实录:危险命令以置信度 1.00 被拒,正常命令放行" width="100%"></td>
 </tr>
 </table>

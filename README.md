@@ -24,7 +24,7 @@ The rule behind all four: what saves is the decision leaving the conversation.
 <td width="50%" valign="top"><b>Context compaction</b> — 200 messages judged in 7 calls, one LLM paragraph replaces the dropped pile; recall 3/3<br><img src="assets/compact.gif" alt="A real transcript fills the context window to 94%; Jev tints each message keep or drop, the LLM's summary paragraph replaces the dropped block, the window falls to 44% and three recall checks pass" width="100%"></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><b>Pong: ball speed = decision latency</b> — 86 Jev decisions in 20 s vs 6 (haiku) and 3 (gemini)<br><img src="assets/pong.gif" alt="Three Pong lanes replaying a live run at 1x: the Jev ball sweeps the field at ~224ms per decision while the LLM balls crawl" width="100%"></td>
+<td width="50%" valign="top"><b>Pong: ball speed = decision latency</b> — 86 Jev decisions in 20 s vs 6 (haiku) and 3 (gemini) called the usual way; enum-constrain both and the gap is 3×<br><img src="assets/pong.gif" alt="Three Pong lanes replaying a live run at 1x: the Jev ball sweeps the field at ~224ms per decision while the LLM balls crawl" width="100%"></td>
 <td width="50%" valign="top"><b>Gate every shell command</b> — dangerous ones denied in ~230 ms with a reason, zero LLM tokens<br><img src="assets/gate.gif" alt="A 24-command dev session gated at 1x: dangerous commands denied at confidence 1.00, benign ones allowed" width="100%"></td>
 </tr>
 </table>

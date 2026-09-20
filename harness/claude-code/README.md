@@ -23,7 +23,7 @@ Manual wiring, in any project's `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "jev": { "command": "npx", "args": ["-y", "jev-use@0.6.0", "serve"] }
+    "jev": { "command": "npx", "args": ["-y", "jev-use@0.6.1", "serve"] }
   }
 }
 ```
@@ -79,7 +79,7 @@ key, plus the one optional `"env"` line described below.
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y jev-use@0.6.0 hook gate",
+            "command": "npx -y jev-use@0.6.1 hook gate",
             "timeout": 30
           }
         ]

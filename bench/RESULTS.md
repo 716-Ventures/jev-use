@@ -586,6 +586,158 @@ batchable work by reference or not at all.
   by construction, and the gate already answers the question with a clean zero-LLM
   verification.
 
+# Fair-baseline decision race
+
+`pong.mjs`'s headline — 86 Jev decisions in 20 s against 6 (claude-haiku-4.5)
+and 3 (gemini-3-flash) — runs the baselines the way an agent loop normally
+calls them, with nothing disabled. That is what a naive caller gets, and it
+is **not** an honest model comparison. `node bench/examples/fairbase.mjs`
+asks the same three-option question of the same states with the baselines
+properly configured: strict JSON-schema enum output, and
+`providerOptions.google.thinkingConfig.thinkingBudget: 0` for Gemini.
+
+40 fresh states per arm, run twice, 2026-09-19, Vercel AI Gateway.
+
+| arm | n | p50 | p95 | out tok | off-set | $/1k judgments |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `jev` | 40 | **225 ms** | 890 | 38 | 0 | **$0.018** |
+| `haiku-free` | 40 | 2,874 ms | 4,899 | 315 | 0 | $1.67 |
+| `haiku-strict` | 40 | 691 ms | 1,200 | 8 | 0 | $0.30 |
+| `gemini-free` | 40 | 6,406 ms | 14,686 | 851 | 5 | $2.60 |
+| `gemini-strict` | 40 | 1,027 ms | 2,438 | 6 | 0 | $0.09 |
+
+(Run 1 is within 1–2% on every p50 except `haiku-free`, which moved 10%;
+tails are not stable — `gemini-free`'s p95 moved 7.0 s to 14.7 s between
+runs. Costs are measured tokens times published list prices, and every chat
+row reconciles with the gateway's own per-call `usage.cost`. Jev's rate is
+from the gateway catalogue: $0.042/Mtok in, $0 out.)
+
+**The honest conclusions:**
+
+- Jev's latency lead over a *properly configured* baseline is **3.0–3.1×**,
+  not 14×. The 86-vs-6 figure describes what an unconfigured caller gets,
+  and should be framed that way wherever it appears.
+- What survives the fair fight is **cost** — 16× cheaper than constrained
+  Haiku, 145× cheaper than the unconstrained call most loops actually make —
+  and **answer shape**: the verdict is inside the option set by construction
+  instead of parsed out of prose.
+- **Decision quality is a wash.** All five arms land 24–30 correct out of 40
+  against a geometric reference. Nothing here says Jev decides better.
+
+## Mechanism findings
+
+- `reasoning_effort: "none" | "minimal" | "low"` **backfires on Haiku**: it
+  enables extended thinking (403–431 reasoning tokens, 3.5–3.8 s) where
+  omitting the parameter entirely gives zero.
+- Gemini's thinking is only switchable off through
+  `providerOptions.google.thinkingConfig.thinkingBudget: 0`. `thinking_level`,
+  `extra_body` and the top-level `google.thinkingConfig` are all ignored.
+- Capping `max_tokens` alone is useless — both models truncate mid-prose with
+  no verdict. Floors that still answer: Haiku 16, Gemini 64.
+- A forced tool call with the same enum is a latency tie on Haiku
+  (648 vs 649 ms), slightly worse on Gemini, and 3× more expensive in prompt
+  tokens. The schema was adopted; the choice does not move the headline.
+
+## Two findings against Jev
+
+- `gemini-free`'s 5 off-set answers are truncations at the 1000-token
+  ceiling after ~960 reasoning tokens — budget artifacts, not model
+  failures. The unconstrained arm's errors should not be read as Gemini
+  being unable to answer.
+- **Jev answered `stay` zero times in 80 calls.** On the 13 states where the
+  reference says hold position it scored 0; every other arm managed 1–3. Its
+  directional judgment was perfect (27/27, both runs) on the states where
+  the reference says move. A model that never selects one of your options
+  fails silently — check the answer distribution, not only the accuracy.
+
+# Agreement rate — 454 judgments
+
+Every other number here is latency. This one is correctness, and it is
+published whatever it says. `node bench/examples/agree.mjs` re-runs it
+(`--cache` reuses the corpus and reference labels, so a rerun is nearly
+free). Run of 2026-09-19 through the Vercel AI Gateway, library defaults,
+no per-family tuning, no rerun kept for being flattering.
+
+| | |
+| --- | --- |
+| Judgments scored | 454 over 422 real states, 5 families, 222 live calls |
+| Agreement with the reference | 82.2% (373/454) |
+| Escalated (handed back to the LLM) | 14.1% (64/454) |
+| **Agreement among non-escalated verdicts** | **89.5%** (349/390) |
+| Always-answer-the-majority-class baseline | 68.7% |
+| Whole corpus | $0.0051 · 77 s · p50 221 ms/call |
+| Same corpus, one LLM call per judgment | ~$0.50 · ~443 s (extrapolated from 40 items) |
+
+Corpus: `gate` 110 shell commands an agent proposed to run (24 hand-labeled
+in this repo, the rest harvested from this repo's scripts/CI/READMEs and
+from the commands the `completion` family really executes); `completion` 73
+commands really run at build time, scored against their **real exit codes**;
+`hn` 120 Hacker News rows fetched live; `compact` 87 real transcript
+messages judged keep-or-drop; `triage` 18 real commits of this repo and 14
+merged `vercel/ai` PRs.
+
+| Family | n | Agreement | Escalated | Non-escalated | Majority baseline | p50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gate` | 110 | 80.9% | 15.5% | **95.7%** | 80.0% | 225 ms |
+| `completion` | 73 | **100.0%** | 0.0% | **100.0%** | 57.5% | 215 ms |
+| `triage` | 64 | 76.6% | 29.7% | **86.7%** | 56.3% | 211 ms |
+| `hn` | 120 | 94.2% | 5.0% | **95.6%** | 68.3% | 297 ms |
+| `compact` | 87 | 56.3% | 25.3% | **60.0%** | 73.6% | 251 ms |
+| **overall** | **454** | **82.2%** | **14.1%** | **89.5%** | **68.7%** | **232 ms** |
+
+**Escalation is doing real work.** Excluding `gate` (whose API returns
+`"escalate"` instead of an answer): the 47 verdicts Jev escalated would have
+been right 24 times (51.1%); the 297 it acted on, 260 times (87.5%). That is
+why 89.5% is the operational number — escalated steps go back to the LLM by
+construction.
+
+## What this measurement cannot tell you
+
+- **The reference is `claude-opus-5`, not ground truth, and LLMs agree with
+  LLMs.** On a random 45-item subsample, `claude-haiku-4.5` — weaker and far
+  cheaper than the grader — agreed with it 35/45 where Jev agreed 33/45.
+  Some of that gap is grader bias; this experiment cannot separate it.
+  (`completion`'s 73 judgments are the exception: real exit codes.)
+- **A hand audit of 34 reference labels disagreed with 3 (8.8%).**
+  Differences smaller than ~9 points are not distinguishable from reference
+  noise. `--check N` prints a deterministic sample to re-audit.
+- **The first reference pass was broken and only the hand labels caught it.**
+  The `gate` question initially went to the reference *without the proposed
+  command* in the state; it labeled `node --version` deny and
+  `DROP TABLE users` allow, matching the in-repo hand labels 13/24. After
+  mirroring `src/judge.ts`'s `gate()` exactly: 24/24. Keep a human-labeled
+  slice precisely for this.
+- **Run-to-run:** judged twice, 447/454 identical answers, but 20 escalate
+  flags (4.4%) flipped across the 0.4 margin boundary — 82.6% vs 82.2%. The
+  second run is the one published.
+- One provider, one region, one day. Every "non-escalated" figure moves with
+  the 0.4 threshold, which is a jev-use default, not a property of Jev.
+
+## Where it fails, by family
+
+- **`gate` never let a dangerous command through.** Of the 22 commands the
+  reference labeled `deny`, Jev denied 18 and escalated 4 — zero
+  `ref=deny → jev=allow`. All four of its errors are over-refusals of
+  commands that mutate nothing (`git merge nonexistent-ref`, `cp /nope ./x`,
+  `unzip notatar.tgz`, `git checkout nonexistent-branch`). Its gate reads
+  intent-to-mutate, not outcome. It clears the majority baseline by 0.9
+  points, i.e. not at all — read the per-class numbers, not the headline.
+- **`compact` (56.3%) is below a constant answerer**, and it is the result
+  to take seriously before adopting this for context pruning. The caveat
+  cuts both ways: the reference flipped **exactly at a batch boundary** —
+  it kept messages 30–58 and dropped all 29 of 59–87, which are the same
+  kind of line — so 29 of the 38 disagreements are one reference judgment
+  ("by now these are redundant") applied to a whole call, against a
+  criterion the question never stated. Effective n is closer to 10 than 87.
+  It was not removed from the score. The usable lesson: do not hand Jev a
+  keep-or-drop rule that lives in your head instead of in the state, and
+  per-message `check()` will not give you redundancy-aware compaction from
+  either model.
+- **`triage`** pulls toward the middle risk level (every `risk`
+  disagreement is within ±1 level, 32/32) and its `route` errors are
+  symmetric. **`hn`** under-matches the topic: the reference called 38
+  stories AI-related, Jev 33.
+
 # Example demos (bench/examples/)
 
 All run live on 2026-09-19 through the Vercel gateway. Each script prints
@@ -659,6 +811,10 @@ Honest findings from these runs:
 - **Weak spot in completion checks:** silent success (empty output,
   `files: 0`) scores far less decisively (P=0.74) than explicit green
   output (0.97–0.99). Give Jev explicit success evidence when you can.
+- **The Pong rate gap is against an unconfigured baseline.** Both LLM
+  lanes run with nothing disabled. With a strict enum schema (and Gemini
+  thinking off) the honest gap is 3×, not 14× — see the fair-baseline
+  section above before quoting 86-vs-6 anywhere.
 - **Pong caveats.** 69 of Jev's 86 decisions carried `escalate: true`
   (thin confidence on a 3-option question — see the finding above). That count
   is from the margin@0.4 default; the demo was not re-run under the new one

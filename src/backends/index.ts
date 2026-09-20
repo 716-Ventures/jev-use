@@ -8,6 +8,7 @@
 import { MockBackend } from "./mock.js";
 import { OpenRouterBackend } from "./openrouter.js";
 import { TypeSafeBackend } from "./typesafe.js";
+import { UnconfiguredBackend } from "./unconfigured.js";
 import { VercelBackend } from "./vercel.js";
 import type { JevBackend } from "./types.js";
 
@@ -99,4 +100,22 @@ function vercel(env: Record<string, string | undefined>): VercelBackend {
     baseUrl: env.AI_GATEWAY_BASE_URL,
     defaultModel: env.JEV_MODEL,
   });
+}
+
+/**
+ * Backend resolution for the long-lived `serve` path, which must start even
+ * when nothing is configured: a missing credential becomes a backend that
+ * answers every call with that same named error, so the harness shows the
+ * server connected and the agent is told what to set.
+ */
+export function createServerBackend(
+  name?: string,
+  env: Record<string, string | undefined> = process.env,
+): ResolvedBackend {
+  try {
+    return createBackend(name, env);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { backend: new UnconfiguredBackend(reason), via: `unconfigured — ${reason}` };
+  }
 }

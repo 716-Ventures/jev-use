@@ -22,7 +22,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createBackend } from "./backends/index.js";
+import { createBackend, createServerBackend } from "./backends/index.js";
 import type { JevBackend } from "./backends/types.js";
 import { Jev } from "./jev.js";
 import { judge } from "./judge.js";
@@ -73,7 +73,7 @@ async function readStdin(): Promise<string> {
 }
 
 async function serve(args: Args): Promise<void> {
-  const { backend, via } = connect(args);
+  const { backend, via } = createServerBackend(args.backend);
   process.stderr.write(`jev-use ${SERVER_VERSION} — backend ${backend.name} (${via})\n`);
   const server = createServer(backend);
   await server.connect(new StdioServerTransport());
