@@ -9,7 +9,7 @@ npx -y jev-use install codex    # runs `codex mcp add` for you, pinned
 Equivalent by hand:
 
 ```bash
-codex mcp add jev -- npx -y "jev-use@0.6.1" serve
+codex mcp add jev -- npx -y "jev-use@0.7.0" serve
 ```
 
 or in `~/.codex/config.toml` (project-scoped: `.codex/config.toml`):
@@ -17,7 +17,7 @@ or in `~/.codex/config.toml` (project-scoped: `.codex/config.toml`):
 ```toml
 [mcp_servers.jev]
 command = "npx"
-args = ["-y", "jev-use@0.6.1", "serve"]
+args = ["-y", "jev-use@0.7.0", "serve"]
 # pass your backend credential through to the server:
 env_vars = ["TYPESAFE_API_KEY", "OPENROUTER_API_KEY", "AI_GATEWAY_API_KEY"]
 ```
@@ -41,7 +41,7 @@ Codex hooks are Claude-shaped, so the same adapter works. In
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y jev-use@0.6.1 hook gate",
+            "command": "npx -y jev-use@0.7.0 hook gate",
             "timeout": 30
           }
         ]
