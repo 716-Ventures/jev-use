@@ -1,9 +1,9 @@
 # Third-party evidence
 
 Everything here is measured by other teams calling Jev directly in their
-own projects, cited from their repos — jev-use has recorded no first-party
-benchmark yet. The ecosystem is as young as Jev itself (weeks); weigh the
-numbers accordingly.
+own projects, cited from their repos; jev-use's own first-party measurements
+are in [bench/RESULTS.md](../bench/RESULTS.md). The ecosystem is as young as
+Jev itself (weeks); weigh the numbers accordingly.
 
 ## Where Jev-in-the-loop wins
 

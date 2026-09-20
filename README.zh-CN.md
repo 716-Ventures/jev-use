@@ -9,12 +9,11 @@ Claude Code / Codex / [pi](https://github.com/badlogic/pi-mono) 与
 
 第一方实测的结论:
 
-- 用 hook 把关每一条 shell 命令:**零 LLM token**,每次阻塞式决策便宜 510 倍。
-- 批量条目**按引用**判断——脚本把文件管道给 CLI,数据不进上下文窗口:快 1.45 倍,输出 token 少 1.80 倍。
-- 单次决策:比 claude-haiku-4.5 便宜 24 倍、比 claude-sonnet-5 便宜 47 倍——赢在**单价**,token 上 Jev 花得更多。
-- 不划算的做法:把这批数据手工粘进 MCP 工具——实测比自己判断还贵。
+- 用 PreToolUse hook 把关每一条 shell 命令:**零 LLM token**——24 次阻塞式决策共 17.1 秒、$0.00046 的 Jev 费用,对比监督 LLM 的 46.9 秒、$0.2366。每次阻塞式决策便宜 510 倍。
+- 单次判断:p50 约 220 ms(含网络);同一状态的 12 个问题合并成一次调用只要 224 ms,逐个问要 2,662 ms。
+- 与 claude-opus-5 基准在 454 个真实判断上的一致率:Jev 采信的判决 **89.5%** 一致;它升级交还的那些若强行采信只有约一半正确——升级契约在真实工作。
 
-四条背后是同一条规则:省下来的,是决策离开了对话本身。
+这些数字底下是同一条设计规则:省下来的,是决策离开了对话本身。
 
 ## 演示——真实运行,1× 速度
 
@@ -83,7 +82,6 @@ Jev 拍不了板的判决会带着 `escalate: true`
 | [src/server.ts](src/server.ts) | 两个 MCP 工具 |
 | [src/cli.ts](src/cli.ts) | `install`、`serve`、`hook gate`、`doctor` |
 | [skills/jev-use/SKILL.md](skills/jev-use/SKILL.md) | agent 遵循的路由规则 |
-| [evals/](evals) | 四个 eval 用例，检验 agent 真的按这套路由走 |
 
 ## 开发
 
@@ -91,7 +89,6 @@ Jev 拍不了板的判决会带着 `escalate: true`
 $ npm run typecheck && npm test    # 单元测试，含各供应商线上格式 fixture
 $ npm run smoke                    # 真实 MCP 客户端 ↔ 构建产物 CLI，走 stdio
 $ node bench/run.mjs               # 微基准，用你的 key 和网络
-$ evals/run.sh                     # 路由 eval 套件（需要 `claude plugin eval`）
 ```
 
 主体由 Claude Code（AI 辅助）编写。

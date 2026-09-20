@@ -5,12 +5,11 @@ description: Use before ANY step that is a decision rather than writing: labelli
 
 # Handing off to Jev
 
-Per decision, measured: Jev $0.000032 / 257 ms vs claude-haiku-4.5 $0.000761 /
-792 ms and claude-sonnet-5 $0.001494 / 1366 ms — 24x and 47x cheaper. That is a
-RATE win ($0.042/Mtok in, $0 out), not a token win: Jev spends *more* tokens per
-decision, not fewer. So the saving is real only when the decision **leaves the
-conversation** — which is what the routing below is for. You stay the planner
-and the writer.
+Jev answers a typed judgment in ~250 ms at a judgment-model rate ($0.042/Mtok
+in, $0 out) instead of LLM reasoning. It is a RATE win, not a token win: Jev
+spends *more* tokens per decision, not fewer. So the saving is real only when
+the decision **leaves the conversation** — which is what the routing below is
+for. You stay the planner and the writer.
 
 ## Route each decision: where are the facts × does it block?
 
@@ -22,13 +21,13 @@ and the writer.
 
 ## Rules that make it pay off
 
-- **Never paste bulk data into `jev_judge`.** Measured on 90 items: pushing
-  them through the tool by hand cost **1.66x MORE** money and 1.45x more time
-  than just deciding them yourself. Instead route by reference (the CLI), or
-  route only the handful you genuinely cannot settle — that lane cost less than
-  pasting everything, and was the only one that got all 90 right 3 times of 3.
-- **Batch.** Measured: 12 questions about one state in ONE call took 186 ms;
-  the same 12 one at a time took 2,672 ms. Never one call per item.
+- **Route bulk data by reference.** When the items sit in a file or in tool
+  output, have a script pipe them to `jev-use judge` — data pasted into a
+  `jev_judge` call travels through your context twice, as tool input and as
+  the verdict block back. Or route only the handful you genuinely cannot
+  settle yourself.
+- **Batch.** Measured: 12 questions about one state in ONE call took 224 ms;
+  the same 12 one at a time took 2,662 ms. Never one call per item.
 - **State is everything Jev sees.** Put the relevant facts (tool output, file
   excerpts, task intent) into `state`; Jev has no other context.
 - **Honor escalations.** A verdict with `escalate: true` hands that question

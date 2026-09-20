@@ -64,19 +64,14 @@ export function createServer(backend: JevBackend): McpServer {
       title: "Batch fast judgments with Jev",
       description:
         "Hand a batch of quick judgment questions to Jev (TypeSafe AI's System One model): " +
-        "measured p50 257ms and $0.000032 per decision — 24x cheaper per decision than " +
-        "claude-haiku-4.5 and 47x cheaper than claude-sonnet-5. That is a RATE win, not a token " +
-        "win: Jev spends more tokens per decision, not fewer, so it only pays when the decision " +
-        "leaves your conversation. " +
+        "a typed verdict in a few hundred milliseconds, at a judgment-model rate instead of " +
+        "LLM reasoning. " +
         "Use it whenever the next step is a JUDGMENT over facts you ALREADY have in context — did X " +
         "succeed, which option next, how good is Y — not a generation. Batch every question you " +
         "have about one state into ONE call (batching is where the speedup comes from). " +
-        "Do NOT paste bulk data in here: if the items to judge are sitting in a file or in tool " +
-        "output, pipe that file to the `jev-use judge` CLI from the shell instead, so the data " +
-        "never passes through this conversation — measured on 90 items, pushing them through this " +
-        "tool by hand cost 1.66x MORE money than deciding them yourself, while the by-reference " +
-        "CLI route was 1.45x faster. Routing only the few items you genuinely cannot settle is " +
-        "the other route that pays. " +
+        "If the items to judge are sitting in a file or in tool output, pipe that file to the " +
+        "`jev-use judge` CLI from the shell instead, so the data never passes through this " +
+        "conversation. " +
         "Do NOT use it for anything that needs new text/code written, or choices whose options you " +
         "cannot enumerate — that work is yours. " +
         "Each verdict returns {answer, confidence, confidenceFrom, escalate, reason, hint}. " +

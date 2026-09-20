@@ -9,12 +9,11 @@ LLM takes over; when a step is only a decision, Jev executes it.
 
 What is measured, first-party:
 
-- Gate every shell command through the hook: **zero LLM tokens**, 510x cheaper per blocking decision.
-- Judge bulk items **by reference** — a script pipes the file to the CLI, so the data never enters the context window: 1.45x faster, 1.80x fewer output tokens.
-- Per decision: 24x cheaper than claude-haiku-4.5, 47x than claude-sonnet-5 — a **rate** win, on tokens Jev spends more.
-- What does **not** pay: pasting that bulk payload through the MCP tool by hand — measured dearer than just deciding it yourself.
+- Gate every shell command through the PreToolUse hook: **zero LLM tokens** — 24 blocking decisions in 17.1 s and $0.00046 of Jev, vs 46.9 s and $0.2366 through a supervisor LLM. 510x cheaper per blocking decision.
+- One judgment: p50 ~220 ms including the network; 12 questions about one state batched into one call take 224 ms, vs 2,662 ms asked one at a time.
+- Agreement with a claude-opus-5 reference over 454 real judgments: **89.5%** on the verdicts Jev acted on; the ones it escalated back would have been right only half the time — the escalation contract earns its keep.
 
-The rule behind all four: what saves is the decision leaving the conversation.
+The design rule underneath: what saves is the decision leaving the conversation.
 
 ## Demos — real runs, 1× speed
 
@@ -88,7 +87,6 @@ and a typed reason. Tools, verdict shape, escalation contract, CLI:
 | [src/server.ts](src/server.ts) | The two MCP tools |
 | [src/cli.ts](src/cli.ts) | `install`, `serve`, `hook gate`, `doctor` |
 | [skills/jev-use/SKILL.md](skills/jev-use/SKILL.md) | The routing rules the agent follows |
-| [evals/](evals) | Four eval cases that check an agent actually routes that way |
 
 ## Development
 
@@ -96,7 +94,6 @@ and a typed reason. Tools, verdict shape, escalation contract, CLI:
 $ npm run typecheck && npm test    # unit tests incl. per-provider wire fixtures
 $ npm run smoke                    # real MCP client ↔ built CLI over stdio
 $ node bench/run.mjs               # micro-benchmarks, your key and region
-$ evals/run.sh                     # routing eval suite (needs `claude plugin eval`)
 ```
 
 Substantially written with Claude Code (AI-assisted).
