@@ -4,16 +4,12 @@
 
 The best way for Claude Code, Codex, and [pi](https://github.com/badlogic/pi-mono)
 to work with [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev):
-hand the steps that need no text output to Jev. When content must be written the
-LLM takes over; when a step is only a decision, Jev executes it.
+hand the tasks that need no text output to Jev — faster steps, fewer
+tokens, tasks done sooner and better.
 
-What is measured, first-party:
-
-- Gate every shell command through the PreToolUse hook: **zero LLM tokens** — 24 blocking decisions in 17.1 s and $0.00046 of Jev, vs 46.9 s and $0.2366 through a supervisor LLM. 510x cheaper per blocking decision.
-- One judgment: p50 ~220 ms including the network; 12 questions about one state batched into one call take 224 ms, vs 2,662 ms asked one at a time.
-- Agreement with a claude-opus-5 reference over 454 real judgments: **89.5%** on the verdicts Jev acted on; the ones it escalated back would have been right only half the time — the escalation contract earns its keep.
-
-The design rule underneath: what saves is the decision leaving the conversation.
+It makes the LLM and Jev true collaborators: when content needs to be
+written, the LLM takes over; when a step just needs a fast decision, Jev
+executes it.
 
 ## Demos — real runs, 1× speed
 
