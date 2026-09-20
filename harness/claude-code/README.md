@@ -23,7 +23,7 @@ Manual wiring, in any project's `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "jev": { "command": "npx", "args": ["-y", "jev-use@0.7.0", "serve"] }
+    "jev": { "command": "npx", "args": ["-y", "jev-use@0.7.1", "serve"] }
   }
 }
 ```
@@ -67,8 +67,8 @@ permission flow decides; if Jev is unreachable it fails open.
 
 This is deliberately NOT enabled by installing the plugin. To turn it on,
 merge [`gate.hooks.json`](./gate.hooks.json) into your `settings.json` (or
-`.claude/settings.json` per project) — it is a settings fragment: a `"hooks"`
-key, plus the one optional `"env"` line described below.
+`.claude/settings.json` per project) — it is a settings fragment: just a
+`"hooks"` key. The optional `"env"` line below is yours to add, or not.
 
 ```json
 {
@@ -79,7 +79,7 @@ key, plus the one optional `"env"` line described below.
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y jev-use@0.7.0 hook gate",
+            "command": "npx -y jev-use@0.7.1 hook gate",
             "timeout": 30
           }
         ]
