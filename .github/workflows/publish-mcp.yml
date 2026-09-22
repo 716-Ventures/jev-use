@@ -24,5 +24,17 @@ jobs:
       - name: Install mcp-publisher
         run: |
           curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      # The registry checks npm for the version in server.json and 400s if it
+      # is not there yet, which a fresh `npm publish` routinely is. Both v0.7.1
+      # and v0.8.0 failed this way and needed a manual re-run.
+      - name: Wait for the npm version in server.json
+        run: |
+          version=$(node -p "require('./server.json').version")
+          for _ in $(seq 1 30); do
+            npm view "jev-use@$version" version && exit 0
+            sleep 10
+          done
+          echo "jev-use@$version never appeared on npm" >&2
+          exit 1
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish
