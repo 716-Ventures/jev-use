@@ -23,7 +23,7 @@ Manual wiring, in any project's `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "jev": { "command": "npx", "args": ["-y", "jev-use@0.7.1", "serve"] }
+    "jev": { "command": "npx", "args": ["-y", "jev-use@0.8.0", "serve"] }
   }
 }
 ```
@@ -79,7 +79,7 @@ merge [`gate.hooks.json`](./gate.hooks.json) into your `settings.json` (or
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y jev-use@0.7.1 hook gate",
+            "command": "npx -y jev-use@0.8.0 hook gate",
             "timeout": 30
           }
         ]

@@ -20,7 +20,7 @@ import {
 import type { JevBackend } from "./backends/types.js";
 
 export const SERVER_NAME = "jev-use";
-export const SERVER_VERSION = "0.7.1";
+export const SERVER_VERSION = "0.8.0";
 
 /** The `Question` shape as MCP callers send it — the wire contract, unchanged. */
 const questionShape = z.object({
