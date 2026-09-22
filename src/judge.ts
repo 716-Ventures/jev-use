@@ -27,6 +27,7 @@ import {
   type Verdict,
 } from "./protocol.js";
 import { BackendError, type JevBackend, type RawAnswer } from "./backends/types.js";
+import { redactSecrets } from "./redact.js";
 
 /** A question with its id resolved — what screening passes to a backend. */
 type IdentifiedQuestion = Question & { id: string };
@@ -179,7 +180,14 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-/** Gate an agent action: sugar over a single allow/deny choice question. */
+/**
+ * Gate an agent action: sugar over a single allow/deny choice question.
+ *
+ * The action is the one part of the judged state nobody wrote by hand — the
+ * hook hands over whatever the agent proposed — so its credentials are
+ * redacted before it leaves the machine (`redact.ts`). The state around it is
+ * sent as given.
+ */
 export async function gate(
   backend: JevBackend,
   request: GateRequest,
@@ -187,8 +195,8 @@ export async function gate(
   const { tool, input, description } = request.action;
   const action = [
     `Tool: ${tool}`,
-    description ? `Description: ${description}` : null,
-    `Input: ${typeof input === "string" ? input : JSON.stringify(input)}`,
+    description ? `Description: ${redactSecrets(description)}` : null,
+    `Input: ${redactSecrets(typeof input === "string" ? input : JSON.stringify(input))}`,
   ]
     .filter(Boolean)
     .join("\n");

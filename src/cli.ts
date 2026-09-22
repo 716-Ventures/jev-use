@@ -151,8 +151,11 @@ function thresholdLine(override?: number): string {
  *   allow     → NO output: fall through to the user's normal permission
  *               flow. The gate only ever tightens, never loosens.
  *
- * Any failure is fail-open (exit 0, no output): a judgment sidecar being
- * down must never block the agent.
+ * A failure BEFORE the call is fail-open (exit 0, no output): no credentials,
+ * or stdin that was not a hook event. A failure of the provider itself is not
+ * — the engine turns an unreachable backend into an escalate verdict, so a
+ * 503, a refused connection or a timeout surfaces as `ask` with the reason
+ * `unreachable`. A command nobody could judge is never waved through.
  */
 async function hookGate(args: Args): Promise<void> {
   let event: Record<string, unknown>;

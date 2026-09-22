@@ -72,8 +72,17 @@ One proposed action, one risk check.
 Returns `{decision: allow | deny | escalate, confidence, confidenceFrom, hint}` — one
 allow/deny `choice` under the hood, `escalate` when confidence falls below
 the threshold. **`allow` stays silent and falls through to your normal
-permission flow — the gate can never grant anything, only deny or ask — and
-if Jev is down it fails open.** As a PreToolUse hook it spends zero LLM
+permission flow — the gate can never grant anything, only deny or ask — and a
+provider that is down escalates to `ask` with the reason `unreachable`, never
+to `allow`.**
+
+The action is the one part of the judged state you did not write, so its
+credentials are redacted before the call ([src/redact.ts](../src/redact.ts)):
+URL passwords, auth and cookie headers, `-u user:pass`, `--token=`/`SECRET=`
+values, and known key shapes become `[redacted]`. Everything the answer
+depends on — the tool, the flags, the host, the path — is sent as-is, and a
+value that is only a reference (`$GITHUB_TOKEN`) is left alone. What the
+removal costs the verdict is measured in [bench/RESULTS.md](../bench/RESULTS.md). As a PreToolUse hook it spends zero LLM
 tokens on the allow path (a deny/ask feeds its reason back to the model —
 that is the point) and adds one ~100 ms round trip per gated call, so scope
 the matcher to tools worth gating.

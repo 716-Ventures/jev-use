@@ -73,6 +73,7 @@ Jev 拍不了板的判决会带着 `escalate: true`
 | [src/dispatch.ts](src/dispatch.ts) | 调用前分路：哪些步骤根本不进 Jev |
 | [src/judge.ts](src/judge.ts) | 筛查 → 后端 → 交还不确定的；`gate` |
 | [src/jev.ts](src/jev.ts) | 引擎之上的 `Jev` 客户端 |
+| [src/redact.ts](src/redact.ts) | 被门控的动作发出前，先抹掉其中的凭据 |
 | [src/backends/](src/backends) | TypeSafe、OpenRouter、Vercel、mock 适配器 |
 | [src/server.ts](src/server.ts) | 两个 MCP 工具 |
 | [src/cli.ts](src/cli.ts) | `install`、`serve`、`hook gate`、`doctor` |
