@@ -50,6 +50,28 @@ Codex's process environment for the hooks, and in the MCP server environment if
 you use that server. `jev-use doctor` makes a live round trip once the key is
 available.
 
+## Confirm hook activity
+
+Automatic Codex hooks append a local JSONL audit at
+`~/.codex/jev-use-audit.jsonl` (or `$CODEX_HOME/jev-use-audit.jsonl`). Set
+`JEV_AUDIT_LOG` to use another path. The file is created with mode `0600`.
+Each record includes the hook event, optional opaque session/turn IDs, backend,
+whether the backend was called and returned, a skip reason when applicable, the
+effect on Codex, and elapsed time. It does **not** contain user prompts, tool
+arguments, fetched results, provider responses, or credentials.
+
+```bash
+tail -n 10 ~/.codex/jev-use-audit.jsonl
+```
+
+`status: "judged"` with `backend: "typesafe"` and `backendSuccesses: 1`
+confirms a provider response. `status: "skipped"` means no backend call was
+made; `skipReason` explains why. `backend_error` and `setup_error` distinguish
+failed attempts from successful judgments. The audit starts when this version
+of the hooks is installed; it cannot establish whether an earlier call used
+Jev. Because Codex can skip an untrusted hook before launching it, the absence
+of a record alone does not prove why a hook did not run.
+
 ## Context and limits
 
 The hooks read the latest user message from `transcript_path` when available.

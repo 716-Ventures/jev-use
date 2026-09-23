@@ -6,6 +6,7 @@ import { redactSecrets } from "./redact.js";
 
 export type CodexEvent = Record<string, unknown>;
 export type HookOutput = Record<string, unknown> | undefined;
+export type SkipReporter = (reason: string) => void;
 
 const MAX_TASK = 4_000;
 const MAX_RESULT = 6_000;
@@ -58,16 +59,25 @@ function context(event: CodexEvent, userTask: string): string {
 }
 
 /** Codex does not support permissionDecision=ask. An uncertain gate returns context to Codex. */
-export async function preToolUse(event: CodexEvent, backend: JevBackend): Promise<HookOutput> {
-  if (!event.tool_name) return undefined;
-  if (String(event.tool_name).startsWith("mcp__jev__")) return undefined;
+export async function preToolUse(event: CodexEvent, backend: JevBackend, onSkip?: SkipReporter): Promise<HookOutput> {
+  if (!event.tool_name) {
+    onSkip?.("missing_tool_name");
+    return undefined;
+  }
+  if (String(event.tool_name).startsWith("mcp__jev__")) {
+    onSkip?.("jev_tool");
+    return undefined;
+  }
   const userTask = task(event);
-  if (!userTask || length(event.tool_input) > 6_000) return {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      additionalContext: "Jev skipped this tool call because task context was unavailable or the input exceeded its limit. Review the action yourself.",
-    },
-  };
+  if (!userTask || length(event.tool_input) > 6_000) {
+    onSkip?.(!userTask ? "missing_task_context" : "oversized_tool_input");
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        additionalContext: "Jev skipped this tool call because task context was unavailable or the input exceeded its limit. Review the action yourself.",
+      },
+    };
+  }
   const verdict = await gate(backend, {
     state: `${context(event, userTask)}\nJudge only whether the proposed action is safe and consistent with the user task.`,
     action: { tool: String(event.tool_name), input: text(event.tool_input, 6_000) },
@@ -97,9 +107,16 @@ export function isFetchedResult(event: CodexEvent): boolean {
 }
 
 /** Drop only confidently irrelevant retrievals. Otherwise preserve the original result. */
-export async function postToolUse(event: CodexEvent, backend: JevBackend): Promise<HookOutput> {
+export async function postToolUse(event: CodexEvent, backend: JevBackend, onSkip?: SkipReporter): Promise<HookOutput> {
   const userTask = task(event);
-  if (!userTask || !isFetchedResult(event) || event.tool_response === undefined || length(event.tool_response) > MAX_RESULT) return undefined;
+  const fetched = isFetchedResult(event);
+  if (!userTask || !fetched || event.tool_response === undefined || length(event.tool_response) > MAX_RESULT) {
+    const reason = !userTask ? "missing_task_context"
+      : !fetched ? "not_retrieval"
+        : event.tool_response === undefined ? "missing_tool_response" : "oversized_tool_response";
+    onSkip?.(reason);
+    return undefined;
+  }
   const result = await judge(backend, {
     state: `User task: ${userTask}\nFetched result from ${String(event.tool_name)}:\n${text(event.tool_response, MAX_RESULT)}`,
     questions: [{
@@ -117,10 +134,18 @@ export async function postToolUse(event: CodexEvent, backend: JevBackend): Promi
 }
 
 /** One completion check per turn. stop_hook_active prevents continuation loops. */
-export async function stop(event: CodexEvent, backend: JevBackend): Promise<HookOutput> {
-  if (event.stop_hook_active === true) return undefined;
+export async function stop(event: CodexEvent, backend: JevBackend, onSkip?: SkipReporter): Promise<HookOutput> {
+  if (event.stop_hook_active === true) {
+    onSkip?.("stop_hook_active");
+    return undefined;
+  }
   const userTask = task(event);
-  if (!userTask || typeof event.last_assistant_message !== "string" || event.last_assistant_message.length > MAX_ANSWER) return undefined;
+  if (!userTask || typeof event.last_assistant_message !== "string" || event.last_assistant_message.length > MAX_ANSWER) {
+    const reason = !userTask ? "missing_task_context"
+      : typeof event.last_assistant_message !== "string" ? "missing_answer" : "oversized_answer";
+    onSkip?.(reason);
+    return undefined;
+  }
   const result = await judge(backend, {
     state: `User task: ${userTask}\nProposed final answer: ${text(event.last_assistant_message, MAX_ANSWER)}`,
     questions: [{

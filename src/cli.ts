@@ -23,7 +23,7 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createBackend, createServerBackend } from "./backends/index.js";
-import { postToolUse, preToolUse, stop } from "./codex-hooks.js";
+import { recordCodexHookSetupFailure, runCodexHook } from "./codex-audit.js";
 import { updateCodexHooks } from "./codex-install.js";
 import type { JevBackend } from "./backends/types.js";
 import { Jev } from "./jev.js";
@@ -202,15 +202,28 @@ async function hookGate(args: Args): Promise<void> {
 
 /** Codex hook entry point with a short single-attempt provider deadline. */
 async function codexHook(kind: string, args: Args): Promise<void> {
-  const handlers = { pre: preToolUse, post: postToolUse, stop } as const;
-  if (!(kind in handlers)) throw new Error(`Unknown Codex hook "${kind}"`);
-  const event = JSON.parse(await readStdin()) as Record<string, unknown>;
-  const { backend } = createBackend(args.backend, {
-    ...process.env,
-    JEV_HTTP_TIMEOUT_MS: process.env.JEV_HTTP_TIMEOUT_MS ?? "2500",
-    JEV_HTTP_RETRIES: process.env.JEV_HTTP_RETRIES ?? "0",
-  });
-  const output = await handlers[kind as keyof typeof handlers](event, backend);
+  if (kind !== "pre" && kind !== "post" && kind !== "stop") throw new Error(`Unknown Codex hook "${kind}"`);
+  let event: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(await readStdin());
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid hook event");
+    event = parsed as Record<string, unknown>;
+  } catch (error) {
+    recordCodexHookSetupFailure(kind, {}, "invalid_event");
+    throw error;
+  }
+  let backend: JevBackend;
+  try {
+    backend = createBackend(args.backend, {
+      ...process.env,
+      JEV_HTTP_TIMEOUT_MS: process.env.JEV_HTTP_TIMEOUT_MS ?? "2500",
+      JEV_HTTP_RETRIES: process.env.JEV_HTTP_RETRIES ?? "0",
+    }).backend;
+  } catch (error) {
+    recordCodexHookSetupFailure(kind, event, "backend_unavailable");
+    throw error;
+  }
+  const output = await runCodexHook(kind, event, backend);
   if (output) process.stdout.write(JSON.stringify(output) + "\n");
 }
 
