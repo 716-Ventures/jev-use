@@ -1,5 +1,7 @@
 # jev-use
 
+> 由 [716 Ventures](https://github.com/716-Ventures) 维护的分支。Codex 的三个生命周期钩子见 [安装指南](harness/codex/README.md)。
+
 [English](README.md) | **简体中文**
 
 Claude Code / Codex / [pi](https://github.com/badlogic/pi-mono) 与
@@ -28,8 +30,10 @@ Jev。
 
 ## 安装
 
+`npx -y jev-use` 仍运行上游 npm 包。本分支的 Codex 钩子请按 [安装指南](harness/codex/README.md) 从仓库安装；仅安装本分支 MCP 服务可运行：
+
 ```bash
-npx -y jev-use install    # 自动配置 Claude Code / Codex / pi——检测到哪个装哪个
+npx -y github:716-Ventures/jev-use#main install codex
 ```
 
 在 agent 运行的环境里配一个 key（`JEV_BACKEND=mock` 可无 key 干跑）：
@@ -89,4 +93,4 @@ $ node bench/run.mjs               # 微基准，用你的 key 和网络
 
 主体由 Claude Code（AI 辅助）编写。
 
-MIT © [shitianfang](https://github.com/shitianfang)
+MIT © [shitianfang](https://github.com/shitianfang)。本分支由 [716 Ventures](https://github.com/716-Ventures) 维护。

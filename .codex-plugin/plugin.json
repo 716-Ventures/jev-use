@@ -18,7 +18,7 @@
   "mcpServers": {
     "jev": {
       "command": "npx",
-      "args": ["-y", "jev-use@0.8.0", "serve"]
+      "args": ["-y", "github:716-Ventures/jev-use#main", "serve"]
     }
   }
 }

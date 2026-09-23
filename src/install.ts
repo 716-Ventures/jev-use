@@ -1,12 +1,11 @@
 /**
- * One-line installer: `npx jev-use install [claude|codex|pi]` wires the
+ * One-line installer: `npx github:716-Ventures/jev-use install [claude|codex|pi]` wires the
  * MCP server (or the pi extension) into whichever harness CLIs are
  * present, by driving each harness's own config command — nothing is
  * written by hand. With no target, every CLI found gets configured.
  */
 
 import { spawnSync } from "node:child_process";
-import { SERVER_VERSION } from "./server.js";
 
 /** The harnesses jev-use knows how to wire itself into. */
 export type Harness = "claude" | "codex" | "pi";
@@ -18,13 +17,13 @@ export interface InstallStep {
   args: string[];
 }
 
-/** The exact commands run per harness; pinned to this build's version. */
-export function installPlan(version: string = SERVER_VERSION): InstallStep[] {
-  const serve = ["npx", "-y", `jev-use@${version}`, "serve"];
+/** The exact commands run per harness, targeting the maintained fork. */
+export function installPlan(): InstallStep[] {
+  const serve = ["npx", "-y", "github:716-Ventures/jev-use#main", "serve"];
   return [
     { harness: "claude", command: "claude", args: ["mcp", "add", "--scope", "user", "jev", "--", ...serve] },
     { harness: "codex", command: "codex", args: ["mcp", "add", "jev", "--", ...serve] },
-    { harness: "pi", command: "pi", args: ["install", "git:github.com/shitianfang/jev-use"] },
+    { harness: "pi", command: "pi", args: ["install", "git:github.com/716-Ventures/jev-use"] },
   ];
 }
 
