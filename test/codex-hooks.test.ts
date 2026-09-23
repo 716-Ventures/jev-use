@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { BackendRequest, BackendResponse, JevBackend } from "../src/backends/types.js";
-import { isFetchedResult, postToolUse, preToolUse, stop } from "../src/codex-hooks.js";
+import { isFetchedResult, postToolUse, preToolUse, stop, taskFromTranscript } from "../src/codex-hooks.js";
 import { gate } from "../src/judge.js";
 
 function backend(answer: string, confidence = 0.99): JevBackend {
@@ -15,6 +18,18 @@ function backend(answer: string, confidence = 0.99): JevBackend {
 const event = { tool_name: "Bash", tool_input: { command: "rm -rf build" }, cwd: "/project" };
 
 describe("Codex hooks", () => {
+  it("extracts the actual task after Codex app metadata", () => {
+    const directory = mkdtempSync(join(tmpdir(), "jev-transcript-"));
+    const path = join(directory, "rollout.jsonl");
+    try {
+      writeFileSync(path, JSON.stringify({ type: "response_item", payload: {
+        type: "message", role: "user", content: [{ type: "input_text", text:
+          "<recommended_plugins>many plugin names</recommended_plugins>\n<environment_context>app metadata</environment_context>\nRun pwd once." }],
+      } }) + "\n");
+      expect(taskFromTranscript(path)).toBe("Run pwd once.");
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it("never converts an unknown gate answer to allow", async () => {
     const result = await gate(backend("unexpected_label"), {
       state: "test", action: { tool: "Bash", input: "rm -rf build" },

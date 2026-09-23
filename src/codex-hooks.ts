@@ -7,7 +7,7 @@ import { redactSecrets } from "./redact.js";
 export type CodexEvent = Record<string, unknown>;
 export type HookOutput = Record<string, unknown> | undefined;
 
-const MAX_TASK = 2_000;
+const MAX_TASK = 4_000;
 const MAX_RESULT = 6_000;
 const MAX_ANSWER = 4_000;
 
@@ -40,14 +40,17 @@ export function taskFromTranscript(path: unknown): string | undefined {
       const item = JSON.parse(line) as { type?: string; payload?: { type?: string; role?: string; content?: { type?: string; text?: string }[] } };
       if (item.type !== "response_item" || item.payload?.type !== "message" || item.payload.role !== "user") continue;
       const message = item.payload.content?.filter((part) => part.type === "input_text").map((part) => part.text ?? "").join("\n").trim();
-      if (message) return text(message, MAX_TASK);
+      const prompt = message?.replace(/<recommended_plugins>[\s\S]*?<\/recommended_plugins>/g, "")
+        .replace(/<environment_context>[\s\S]*?<\/environment_context>/g, "").trim();
+      if (prompt && prompt.length <= MAX_TASK) return redactSecrets(prompt);
     }
   } catch { /* Missing or changing transcript format: skip this judgment. */ }
   return undefined;
 }
 
 function task(event: CodexEvent): string | undefined {
-  return taskFromTranscript(event.transcript_path) ?? (process.env.JEV_TASK_STATE ? text(process.env.JEV_TASK_STATE, MAX_TASK) : undefined);
+  const fallback = process.env.JEV_TASK_STATE;
+  return taskFromTranscript(event.transcript_path) ?? (fallback && fallback.length <= MAX_TASK ? redactSecrets(fallback) : undefined);
 }
 
 function context(event: CodexEvent, userTask: string): string {

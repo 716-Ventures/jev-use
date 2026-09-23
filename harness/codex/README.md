@@ -53,7 +53,7 @@ available.
 ## Context and limits
 
 The hooks read the latest user message from `transcript_path` when available.
-They send at most 2,000 characters of that message, 6,000 characters of a
+They send at most 4,000 characters of that message, 6,000 characters of a
 fetched result, or 4,000 characters of the proposed final answer. Set
 `JEV_TASK_STATE` to supply context when no transcript is available. Built-in
 redaction masks common credential formats, but it is not a guarantee that all
