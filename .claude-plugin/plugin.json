@@ -4,11 +4,11 @@
   "version": "0.8.0",
   "description": "Hand the steps needing no text output to Jev (TypeSafe judgment model): jev_judge / jev_gate MCP tools, a routing skill, and typed escalation back to the LLM. Judged state is sent to the provider you configure (TypeSafe, OpenRouter, or Vercel AI Gateway); JEV_BACKEND=mock makes no network calls at all.",
   "author": {
-    "name": "shitianfang",
-    "url": "https://github.com/shitianfang"
+    "name": "716 Ventures",
+    "url": "https://github.com/716-Ventures"
   },
-  "homepage": "https://github.com/shitianfang/jev-use",
-  "repository": "https://github.com/shitianfang/jev-use",
+  "homepage": "https://github.com/716-Ventures/jev-use",
+  "repository": "https://github.com/716-Ventures/jev-use",
   "license": "MIT",
   "keywords": [
     "jev",

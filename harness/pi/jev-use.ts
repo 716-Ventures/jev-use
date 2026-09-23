@@ -9,7 +9,7 @@
  * client's `answers` map would duplicate every verdict in text the model
  * pays for.
  *
- * Install: `pi install git:github.com/shitianfang/jev-use`
+ * Install: `pi install git:github.com/716-Ventures/jev-use`
  * or copy this file into ~/.pi/agent/extensions/.
  */
 

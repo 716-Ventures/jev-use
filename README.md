@@ -1,6 +1,6 @@
 # jev-use
 
-> This fork adds bounded Codex lifecycle judgments and validates provider answers before acting on them. See [the Codex setup guide](harness/codex/README.md) for the three hooks and their limits.
+> Maintained by [716 Ventures](https://github.com/716-Ventures). This fork adds bounded Codex lifecycle judgments and validates provider answers before acting on them. See [the Codex setup guide](harness/codex/README.md) for the three hooks and their limits.
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -36,7 +36,8 @@ all numbers, methodology, variance and caveats:
 The npm name `jev-use` still resolves to the upstream release. For this fork's
 Codex lifecycle hooks, install from this repository using the
 [Codex setup guide](harness/codex/README.md). The command below installs the
-upstream MCP package only.
+upstream MCP package only. To install this fork's MCP server through a harness
+CLI, run `npx -y github:716-Ventures/jev-use#main install codex` (or `claude` / `pi`).
 
 ```bash
 npx -y jev-use install    # wires Claude Code, Codex, and pi — whichever it finds
@@ -102,4 +103,4 @@ $ node bench/run.mjs               # micro-benchmarks, your key and region
 
 Substantially written with Claude Code (AI-assisted).
 
-MIT © [shitianfang](https://github.com/shitianfang)
+MIT © [shitianfang](https://github.com/shitianfang). Fork maintained by [716 Ventures](https://github.com/716-Ventures).

@@ -3,7 +3,7 @@
 ## MCP tools
 
 ```bash
-npx -y jev-use install claude    # runs `claude mcp add` for you, pinned
+npx -y github:716-Ventures/jev-use#main install claude    # runs `claude mcp add` for you
 ```
 
 ## Plugin form: tools + routing skill
@@ -12,7 +12,7 @@ The repo root is a Claude Code plugin: installing it adds a skill teaching
 the routing rules on top of the tools.
 
 ```bash
-git clone https://github.com/shitianfang/jev-use && cd jev-use && npm install
+git clone https://github.com/716-Ventures/jev-use && cd jev-use && npm install
 claude --plugin-dir .
 ```
 
@@ -23,7 +23,7 @@ Manual wiring, in any project's `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "jev": { "command": "npx", "args": ["-y", "jev-use@0.8.0", "serve"] }
+    "jev": { "command": "npx", "args": ["-y", "github:716-Ventures/jev-use#main", "serve"] }
   }
 }
 ```
@@ -53,7 +53,7 @@ in `~/.claude/settings.json`, or a project's `.claude/settings.json`;
 `--dangerously-skip-permissions` also gets a headless run through, but it
 switches off every check, not these two.
 
-`npx -y jev-use doctor` reports whether the rules are in place and prints that
+`npx -y github:716-Ventures/jev-use#main doctor` reports whether the rules are in place and prints that
 snippet when they are not. Installing does NOT write them: pre-authorizing a
 tool that sends your state to a third party is your decision, not the
 installer's.
@@ -79,7 +79,7 @@ merge [`gate.hooks.json`](./gate.hooks.json) into your `settings.json` (or
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y jev-use@0.8.0 hook gate",
+            "command": "npx -y github:716-Ventures/jev-use#main hook gate",
             "timeout": 30
           }
         ]
@@ -92,7 +92,7 @@ merge [`gate.hooks.json`](./gate.hooks.json) into your `settings.json` (or
 Tune with `JEV_GATE_THRESHOLD`: higher = more actions get routed to a
 human/Claude for review. Unset, the threshold follows where the confidence came
 from — `0.5` when Jev reported it, `0.4` when jev-use estimated it from the
-answer's distribution — and `npx -y jev-use doctor` prints both in effect.
+answer's distribution — and `npx -y github:716-Ventures/jev-use#main doctor` prints both in effect.
 
 A hook event tells Jev only the cwd and the permission mode. Anything else that
 changes the answer — what this checkout is, what is reachable from it — you say

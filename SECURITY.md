@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Report privately through GitHub's
-[security advisories](https://github.com/shitianfang/jev-use/security/advisories/new)
+[security advisories](https://github.com/716-Ventures/jev-use/security/advisories/new)
 for this repository. Please do not open a public issue for anything
 exploitable. Expect a first reply within a week.
 
