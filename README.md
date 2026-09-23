@@ -1,6 +1,6 @@
 # jev-use
 
-> This fork adds bounded Codex lifecycle judgments and validates provider answers before acting on them. See [the Codex setup guide](harness/codex/README.md) for the three hooks and their limits.
+> Maintained by [716 Ventures](https://github.com/716-Ventures). This fork adds bounded Codex lifecycle judgments and validates provider answers before acting on them. See [the Codex setup guide](harness/codex/README.md) for the three hooks and their limits.
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -102,4 +102,4 @@ $ node bench/run.mjs               # micro-benchmarks, your key and region
 
 Substantially written with Claude Code (AI-assisted).
 
-MIT © [shitianfang](https://github.com/shitianfang)
+MIT © [shitianfang](https://github.com/shitianfang). Fork maintained by [716 Ventures](https://github.com/716-Ventures).
