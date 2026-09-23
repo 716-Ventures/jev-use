@@ -54,6 +54,7 @@ export async function runCodexHook(kind: CodexHookKind, event: CodexEvent, backe
   let backendSuccesses = 0;
   let backendErrors = 0;
   let skipReason: string | undefined;
+  let jevDecision: string | undefined;
   let output: HookOutput;
   let failed = false;
   const observedBackend: JevBackend = {
@@ -71,7 +72,10 @@ export async function runCodexHook(kind: CodexHookKind, event: CodexEvent, backe
     },
   };
   try {
-    output = await handlers[kind](event, observedBackend, (reason) => { skipReason = reason; });
+    const onSkip = (reason: string) => { skipReason = reason; };
+    output = kind === "pre"
+      ? await preToolUse(event, observedBackend, onSkip, (decision) => { jevDecision = decision; })
+      : await handlers[kind](event, observedBackend, onSkip);
     return output;
   } catch (error) {
     failed = true;
@@ -86,6 +90,7 @@ export async function runCodexHook(kind: CodexHookKind, event: CodexEvent, backe
       backend: backend.name,
       status: failed ? "hook_error" : backendSuccesses > 0 ? "judged" : backendErrors > 0 ? "backend_error" : "skipped",
       ...(skipReason ? { skipReason } : {}),
+      ...(jevDecision ? { jevDecision } : {}),
       backendCalls,
       backendSuccesses,
       backendErrors,

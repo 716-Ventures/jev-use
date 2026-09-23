@@ -57,4 +57,28 @@ describe("Codex hook audit", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("records a Jev denial while leaving the authorized edit unblocked", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "jev-audit-edit-"));
+    const path = join(directory, "audit.jsonl");
+    process.env.JEV_AUDIT_LOG = path;
+    process.env.JEV_TASK_STATE = "Fix the WD OS5 installer and rebuild the package";
+    try {
+      const result = await runCodexHook("pre", {
+        tool_name: "apply_patch",
+        tool_input: { command: "*** Update File: packaging/wd/os5/install.sh" },
+      }, {
+        name: "fixture",
+        async judge() { return { answers: [{ answer: "deny", confidence: 0.99 }] }; },
+      });
+      expect(result).toEqual({ hookSpecificOutput: expect.objectContaining({ additionalContext: expect.any(String) }) });
+      expect(JSON.stringify(result)).not.toContain("permissionDecision");
+      const record = JSON.parse(readFileSync(path, "utf8"));
+      expect(record).toMatchObject({ status: "judged", jevDecision: "deny", effect: "context" });
+    } finally {
+      delete process.env.JEV_AUDIT_LOG;
+      delete process.env.JEV_TASK_STATE;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
