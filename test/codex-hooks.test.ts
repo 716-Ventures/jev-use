@@ -23,14 +23,19 @@ describe("Codex hooks", () => {
   });
 
   it("uses only supported Codex pre-tool outputs", async () => {
-    const unsure = await preToolUse(event, backend("allow", 0.1));
-    expect(unsure).toEqual({ hookSpecificOutput: expect.objectContaining({
-      hookEventName: "PreToolUse", additionalContext: expect.any(String),
-    }) });
-    expect(JSON.stringify(unsure)).not.toContain('"ask"');
-    const denied = await preToolUse(event, backend("deny"));
-    expect(denied).toEqual({ hookSpecificOutput: expect.objectContaining({ permissionDecision: "deny" }) });
-    expect(await preToolUse(event, backend("allow"))).toBeUndefined();
+    process.env.JEV_TASK_STATE = "Clean up the build folder";
+    try {
+      const unsure = await preToolUse(event, backend("allow", 0.1));
+      expect(unsure).toEqual({ hookSpecificOutput: expect.objectContaining({
+        hookEventName: "PreToolUse", additionalContext: expect.any(String),
+      }) });
+      expect(JSON.stringify(unsure)).not.toContain('"ask"');
+      const denied = await preToolUse(event, backend("deny"));
+      expect(denied).toEqual({ hookSpecificOutput: expect.objectContaining({ permissionDecision: "deny" }) });
+      expect(await preToolUse(event, backend("allow"))).toBeUndefined();
+      const oversized = await preToolUse({ ...event, tool_input: { command: "x".repeat(7_000) } }, backend("allow"));
+      expect(oversized).toEqual({ hookSpecificOutput: expect.objectContaining({ additionalContext: expect.stringContaining("exceeded") }) });
+    } finally { delete process.env.JEV_TASK_STATE; }
   });
 
   it("filters fetched results and only blocks confident irrelevant evidence", async () => {

@@ -16,6 +16,10 @@ function text(value: unknown, limit: number): string {
   return redactSecrets(serialized.slice(0, limit));
 }
 
+function length(value: unknown): number {
+  return (typeof value === "string" ? value : JSON.stringify(value ?? "")).length;
+}
+
 /** Find the most recent real user message in a Codex transcript, without sending the transcript. */
 export function taskFromTranscript(path: unknown): string | undefined {
   if (typeof path !== "string" || !path) return undefined;
@@ -46,16 +50,23 @@ function task(event: CodexEvent): string | undefined {
   return taskFromTranscript(event.transcript_path) ?? (process.env.JEV_TASK_STATE ? text(process.env.JEV_TASK_STATE, MAX_TASK) : undefined);
 }
 
-function context(event: CodexEvent): string {
-  return `Working directory: ${text(event.cwd ?? "unknown", 300)}\nUser task: ${task(event) ?? "not available"}`;
+function context(event: CodexEvent, userTask: string): string {
+  return `Working directory: ${text(event.cwd ?? "unknown", 300)}\nUser task: ${userTask}`;
 }
 
 /** Codex does not support permissionDecision=ask. An uncertain gate returns context to Codex. */
 export async function preToolUse(event: CodexEvent, backend: JevBackend): Promise<HookOutput> {
   if (!event.tool_name) return undefined;
   if (String(event.tool_name).startsWith("mcp__jev__")) return undefined;
+  const userTask = task(event);
+  if (!userTask || length(event.tool_input) > 6_000) return {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: "Jev skipped this tool call because task context was unavailable or the input exceeded its limit. Review the action yourself.",
+    },
+  };
   const verdict = await gate(backend, {
-    state: `${context(event)}\nJudge only whether the proposed action is safe and consistent with the user task.`,
+    state: `${context(event, userTask)}\nJudge only whether the proposed action is safe and consistent with the user task.`,
     action: { tool: String(event.tool_name), input: text(event.tool_input, 6_000) },
   });
   if (verdict.decision === "allow") return undefined;
@@ -85,7 +96,7 @@ export function isFetchedResult(event: CodexEvent): boolean {
 /** Drop only confidently irrelevant retrievals. Otherwise preserve the original result. */
 export async function postToolUse(event: CodexEvent, backend: JevBackend): Promise<HookOutput> {
   const userTask = task(event);
-  if (!userTask || !isFetchedResult(event) || event.tool_response === undefined) return undefined;
+  if (!userTask || !isFetchedResult(event) || event.tool_response === undefined || length(event.tool_response) > MAX_RESULT) return undefined;
   const result = await judge(backend, {
     state: `User task: ${userTask}\nFetched result from ${String(event.tool_name)}:\n${text(event.tool_response, MAX_RESULT)}`,
     questions: [{
@@ -106,7 +117,7 @@ export async function postToolUse(event: CodexEvent, backend: JevBackend): Promi
 export async function stop(event: CodexEvent, backend: JevBackend): Promise<HookOutput> {
   if (event.stop_hook_active === true) return undefined;
   const userTask = task(event);
-  if (!userTask || typeof event.last_assistant_message !== "string") return undefined;
+  if (!userTask || typeof event.last_assistant_message !== "string" || event.last_assistant_message.length > MAX_ANSWER) return undefined;
   const result = await judge(backend, {
     state: `User task: ${userTask}\nProposed final answer: ${text(event.last_assistant_message, MAX_ANSWER)}`,
     questions: [{

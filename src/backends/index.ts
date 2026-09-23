@@ -59,7 +59,7 @@ export function createBackend(
   }
 
   if (env.TYPESAFE_API_KEY || env.TYPESAFE_AI_API_KEY || env.JEV_TYPESAFE_KEYCHAIN_SERVICE) {
-    return { backend: typesafe(env), via: "auto: TYPESAFE_API_KEY found" };
+    return { backend: typesafe(env), via: env.TYPESAFE_API_KEY || env.TYPESAFE_AI_API_KEY ? "auto: TYPESAFE_API_KEY found" : `auto: macOS Keychain (${env.JEV_TYPESAFE_KEYCHAIN_SERVICE})` };
   }
   if (env.OPENROUTER_API_KEY) {
     return { backend: openrouter(env), via: "auto: OPENROUTER_API_KEY found" };

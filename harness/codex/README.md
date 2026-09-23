@@ -60,6 +60,10 @@ redaction masks common credential formats, but it is not a guarantee that all
 private data is removed; inspect provider data policy before enabling automatic
 remote judgments for sensitive work.
 
+Oversized tool inputs are returned to Codex for review, and oversized fetched
+results or proposed answers are left untouched. Jev does not make a decisive
+judgment from a truncated result.
+
 Each automatic judgment uses one HTTP attempt with a 2.5-second request
 limit. Override with `JEV_HTTP_TIMEOUT_MS` and `JEV_HTTP_RETRIES` if needed.
 A backend failure or missing task context leaves Codex to handle the event.
