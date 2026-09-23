@@ -8,6 +8,11 @@ This fork adds three synchronous Codex hook commands. Codex itself is unchanged.
 | `PostToolUse` | `hook codex post` | Is a fetched result relevant to the task? |
 | `Stop` | `hook codex stop` | Is a requested part plainly unfinished? |
 
+Pre-tool judgments are advisory. Even a Jev `deny` is returned as context, not
+as a Codex permission denial: Jev cannot override the user's authorization or
+Codex's normal permission and sandbox checks. The audit records that verdict
+as `jevDecision: "deny"` with `effect: "context"`.
+
 The post hook runs only for retrieval-shaped MCP tools and Bash calls using
 `curl`, `wget`, or `gh api`. It discards a result only when Jev says `irrelevant`
 with confidence at least 0.9. The stop hook requests at most one continuation

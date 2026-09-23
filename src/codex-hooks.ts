@@ -2,6 +2,7 @@
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import type { JevBackend } from "./backends/types.js";
 import { gate, judge } from "./judge.js";
+import type { GateResult } from "./protocol.js";
 import { redactSecrets } from "./redact.js";
 
 export type CodexEvent = Record<string, unknown>;
@@ -58,8 +59,13 @@ function context(event: CodexEvent, userTask: string): string {
   return `Working directory: ${text(event.cwd ?? "unknown", 300)}\nUser task: ${userTask}`;
 }
 
-/** Codex does not support permissionDecision=ask. An uncertain gate returns context to Codex. */
-export async function preToolUse(event: CodexEvent, backend: JevBackend, onSkip?: SkipReporter): Promise<HookOutput> {
+/** Jev's pre-tool verdict is advisory; only Codex's own policy may block an action. */
+export async function preToolUse(
+  event: CodexEvent,
+  backend: JevBackend,
+  onSkip?: SkipReporter,
+  onVerdict?: (decision: GateResult["decision"]) => void,
+): Promise<HookOutput> {
   if (!event.tool_name) {
     onSkip?.("missing_tool_name");
     return undefined;
@@ -82,12 +88,12 @@ export async function preToolUse(event: CodexEvent, backend: JevBackend, onSkip?
     state: `${context(event, userTask)}\nJudge only whether the proposed action is safe and consistent with the user task.`,
     action: { tool: String(event.tool_name), input: text(event.tool_input, 6_000) },
   });
+  onVerdict?.(verdict.decision);
   if (verdict.decision === "allow") return undefined;
   if (verdict.decision === "deny") return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: "Jev judged this proposed tool call unsafe or off task. Review it before trying another action.",
+      additionalContext: "Jev flagged the proposed action for review. This is advisory, not a permission denial. Follow the user's authorization and Codex's normal permission and sandbox checks.",
     },
   };
   return {
