@@ -76,6 +76,7 @@ function typesafe(env: Record<string, string | undefined>): TypeSafeBackend {
   const apiKey = env.TYPESAFE_API_KEY ?? env.TYPESAFE_AI_API_KEY;
   if (!apiKey) throw new Error("JEV_BACKEND=typesafe needs TYPESAFE_API_KEY.");
   return new TypeSafeBackend({
+    ...transport(env),
     apiKey,
     baseUrl: env.TYPESAFE_BASE_URL,
     defaultModel: env.JEV_MODEL ?? env.TYPESAFE_DEFAULT_MODEL,
@@ -86,6 +87,7 @@ function openrouter(env: Record<string, string | undefined>): OpenRouterBackend 
   const apiKey = env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("JEV_BACKEND=openrouter needs OPENROUTER_API_KEY.");
   return new OpenRouterBackend({
+    ...transport(env),
     apiKey,
     baseUrl: env.OPENROUTER_BASE_URL,
     defaultModel: env.JEV_MODEL,
@@ -96,10 +98,20 @@ function vercel(env: Record<string, string | undefined>): VercelBackend {
   const apiKey = env.AI_GATEWAY_API_KEY;
   if (!apiKey) throw new Error("JEV_BACKEND=vercel needs AI_GATEWAY_API_KEY.");
   return new VercelBackend({
+    ...transport(env),
     apiKey,
     baseUrl: env.AI_GATEWAY_BASE_URL,
     defaultModel: env.JEV_MODEL,
   });
+}
+
+function transport(env: Record<string, string | undefined>): { timeoutMs?: number; maxRetries?: number } {
+  const timeout = Number(env.JEV_HTTP_TIMEOUT_MS);
+  const retries = Number(env.JEV_HTTP_RETRIES);
+  return {
+    ...(env.JEV_HTTP_TIMEOUT_MS && Number.isFinite(timeout) && timeout > 0 ? { timeoutMs: timeout } : {}),
+    ...(env.JEV_HTTP_RETRIES && Number.isInteger(retries) && retries >= 0 ? { maxRetries: retries } : {}),
+  };
 }
 
 /**

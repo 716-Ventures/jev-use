@@ -196,7 +196,8 @@ live check.
 ```
 jev-use install [claude|codex|pi]   wire the server into your harness via its own CLI (all found, if no target)
 jev-use serve                 stdio MCP server
-jev-use hook gate             PreToolUse hook adapter (Claude Code / Codex)
+jev-use hook gate             PreToolUse hook adapter (Claude Code)
+jev-use hook codex pre|post|stop  Codex lifecycle hook adapters
 jev-use judge ['{...}']       one-shot JudgeRequest from argv or stdin
 jev-use doctor                backend resolution + one live round trip
 ```

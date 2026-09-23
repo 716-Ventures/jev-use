@@ -1,5 +1,7 @@
 # jev-use
 
+> This fork adds bounded Codex lifecycle judgments and validates provider answers before acting on them. See [the Codex setup guide](harness/codex/README.md) for the three hooks and their limits.
+
 **English** | [简体中文](README.zh-CN.md)
 
 The best way for Claude Code, Codex, and [pi](https://github.com/badlogic/pi-mono)

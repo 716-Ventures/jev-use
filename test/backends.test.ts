@@ -75,6 +75,16 @@ function mockFetchOnce(status: number, body: unknown, headers: Record<string, st
 afterEach(() => vi.unstubAllGlobals());
 
 describe("TypeSafeBackend", () => {
+  it("rejects a choice outside the requested options", async () => {
+    mockFetchOnce(200, {
+      answers: { team: { type: "choice", choice: "unknown", confidence: 0.99 } },
+    });
+    const backend = new TypeSafeBackend({ apiKey: "sk-test" });
+    await expect(backend.judge({ state: "s", questions: [questions[1]] })).rejects.toThrow(
+      /outside the question/,
+    );
+  });
+
   it("posts the native body to /v1/systemone and parses the answer map", async () => {
     const { calls } = mockFetchOnce(200, {
       model: "jev-1.13",

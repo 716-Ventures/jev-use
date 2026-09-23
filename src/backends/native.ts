@@ -108,6 +108,12 @@ export function parseNativeAnswers(
           confidence: answer.confidence,
         };
       case "choice":
+        if (!optionEntries(question.options ?? []).some(([label]) => label === answer.choice)) {
+          throw new BackendError(
+            backend,
+            `answer "${question.id}" chose an option outside the question`,
+          );
+        }
         return {
           answer: stringOrThrow(backend, question.id, answer.choice),
           confidence: answer.confidence,

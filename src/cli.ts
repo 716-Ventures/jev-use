@@ -23,6 +23,8 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createBackend, createServerBackend } from "./backends/index.js";
+import { postToolUse, preToolUse, stop } from "./codex-hooks.js";
+import { updateCodexHooks } from "./codex-install.js";
 import type { JevBackend } from "./backends/types.js";
 import { Jev } from "./jev.js";
 import { judge } from "./judge.js";
@@ -198,6 +200,20 @@ async function hookGate(args: Args): Promise<void> {
   }
 }
 
+/** Codex hook entry point with a short single-attempt provider deadline. */
+async function codexHook(kind: string, args: Args): Promise<void> {
+  const handlers = { pre: preToolUse, post: postToolUse, stop } as const;
+  if (!(kind in handlers)) throw new Error(`Unknown Codex hook "${kind}"`);
+  const event = JSON.parse(await readStdin()) as Record<string, unknown>;
+  const { backend } = createBackend(args.backend, {
+    ...process.env,
+    JEV_HTTP_TIMEOUT_MS: process.env.JEV_HTTP_TIMEOUT_MS ?? "2500",
+    JEV_HTTP_RETRIES: process.env.JEV_HTTP_RETRIES ?? "0",
+  });
+  const output = await handlers[kind as keyof typeof handlers](event, backend);
+  if (output) process.stdout.write(JSON.stringify(output) + "\n");
+}
+
 /**
  * One-shot judgment for smoke tests and CI. Prints the engine's result
  * verbatim — the same JSON the MCP tool returns — so it stays diffable.
@@ -307,8 +323,11 @@ export const HELP = `jev-use ${SERVER_VERSION} — the typed handoff between you
 
 usage:
   jev-use install [claude|codex|pi]      wire the MCP server into your harness (all found, if no target)
+  jev-use install codex-hooks           merge global Codex hooks (requires a configured backend)
+  jev-use uninstall codex-hooks         remove only jev-use global hooks
   jev-use serve [--backend name]         stdio MCP server
   jev-use hook gate [--threshold N]      PreToolUse hook adapter (Claude Code / Codex)
+  jev-use hook codex pre|post|stop        Bounded Codex lifecycle judgments
   jev-use judge ['{...}']                one-shot JudgeRequest from argv or stdin
   jev-use doctor                         backend + one live round trip + permission rules
 
@@ -333,9 +352,17 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const [command, subcommand] = args.command;
   try {
-    if (command === "install") process.exitCode = runInstall(subcommand);
+    if (command === "install" && subcommand === "codex-hooks") {
+      createBackend(args.backend);
+      process.stdout.write(`Installed Codex hooks in ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), process.execPath, fileURLToPath(import.meta.url), true)}\n`);
+    }
+    else if (command === "uninstall" && subcommand === "codex-hooks") {
+      process.stdout.write(`Removed Codex hooks from ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), process.execPath, fileURLToPath(import.meta.url), false)}\n`);
+    }
+    else if (command === "install") process.exitCode = runInstall(subcommand);
     else if (command === "serve") await serve(args);
     else if (command === "hook" && subcommand === "gate") await hookGate(args);
+    else if (command === "hook" && subcommand === "codex") await codexHook(args.command[2], args);
     else if (command === "judge") await judgeOnce(args);
     else if (command === "doctor") await doctor(args);
     else if (command === "version") process.stdout.write(`${SERVER_VERSION}\n`);
