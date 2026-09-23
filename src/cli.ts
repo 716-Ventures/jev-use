@@ -354,7 +354,7 @@ async function main(): Promise<void> {
   try {
     if (command === "install" && subcommand === "codex-hooks") {
       createBackend(args.backend);
-      process.stdout.write(`Installed Codex hooks in ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), process.execPath, fileURLToPath(import.meta.url), true)}\n`);
+      process.stdout.write(`Installed Codex hooks in ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), process.execPath, fileURLToPath(import.meta.url), true, process.env.JEV_TYPESAFE_KEYCHAIN_SERVICE)}\n`);
     }
     else if (command === "uninstall" && subcommand === "codex-hooks") {
       process.stdout.write(`Removed Codex hooks from ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), process.execPath, fileURLToPath(import.meta.url), false)}\n`);

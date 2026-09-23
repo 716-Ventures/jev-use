@@ -17,15 +17,24 @@ supported `additionalContext` on uncertainty; Codex does **not** support the
 
 ## Install from a stable clone
 
-Use Node.js 20+ and make `TYPESAFE_API_KEY` available in the environment that
-launches Codex. You can also use `JEV_BACKEND=mock` for local contract tests;
-mock judgments are not real safety decisions.
+Use Node.js 20+. For TypeSafe direct on macOS, store the key in Keychain from
+your own terminal; `security` prompts for it without placing it in shell
+history or in the Codex conversation:
+
+```bash
+security add-generic-password -a "$(whoami)" -s jev-use-typesafe -U -w
+```
+
+You can instead make `TYPESAFE_API_KEY` available in the environment that
+launches Codex. `JEV_BACKEND=mock` is only for local contract tests; mock
+judgments are not real safety decisions.
 
 ```bash
 npm ci
 npm run build
-node dist/cli.js install codex-hooks
-codex mcp add jev -- node /absolute/path/to/your/clone/dist/cli.js serve
+JEV_TYPESAFE_KEYCHAIN_SERVICE=jev-use-typesafe node dist/cli.js doctor
+JEV_TYPESAFE_KEYCHAIN_SERVICE=jev-use-typesafe node dist/cli.js install codex-hooks
+codex mcp add jev -- env JEV_TYPESAFE_KEYCHAIN_SERVICE=jev-use-typesafe node /absolute/path/to/your/clone/dist/cli.js serve
 ```
 
 `install codex-hooks` checks backend configuration, then merges the three hook

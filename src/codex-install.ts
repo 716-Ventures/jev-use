@@ -20,9 +20,10 @@ function removeOwnGroups(config: HooksFile): HooksFile {
   return { ...config, hooks };
 }
 
-export function mergedCodexHooks(config: HooksFile, nodePath: string, cliPath: string): HooksFile {
+export function mergedCodexHooks(config: HooksFile, nodePath: string, cliPath: string, keychainService?: string): HooksFile {
   const result = removeOwnGroups(structuredClone(config));
-  const command = (kind: string) => `${MARKER} ${quoted(nodePath)} ${quoted(cliPath)} hook codex ${kind}`;
+  const keychain = keychainService ? ` JEV_TYPESAFE_KEYCHAIN_SERVICE=${quoted(keychainService)}` : "";
+  const command = (kind: string) => `${MARKER}${keychain} ${quoted(nodePath)} ${quoted(cliPath)} hook codex ${kind}`;
   const entries: [string, Group][] = [
     ["PreToolUse", { matcher: "*", hooks: [{ type: "command", command: command("pre"), timeout: 5, statusMessage: "Jev checks the proposed action" }] }],
     ["PostToolUse", { matcher: "Bash|mcp__.*", hooks: [{ type: "command", command: command("post"), timeout: 5, statusMessage: "Jev checks fetched evidence" }] }],
@@ -35,11 +36,11 @@ export function mergedCodexHooks(config: HooksFile, nodePath: string, cliPath: s
   return result;
 }
 
-export function updateCodexHooks(codexHome: string, nodePath: string, cliPath: string, install: boolean): string {
+export function updateCodexHooks(codexHome: string, nodePath: string, cliPath: string, install: boolean, keychainService?: string): string {
   const file = join(codexHome, "hooks.json");
   const original = existsSync(file) ? readFileSync(file, "utf8") : "{}\n";
   const parsed = JSON.parse(original) as HooksFile;
-  const updated = install ? mergedCodexHooks(parsed, nodePath, cliPath) : removeOwnGroups(structuredClone(parsed));
+  const updated = install ? mergedCodexHooks(parsed, nodePath, cliPath, keychainService) : removeOwnGroups(structuredClone(parsed));
   mkdirSync(codexHome, { recursive: true });
   if (existsSync(file)) writeFileSync(`${file}.jev-use-backup`, original, { mode: 0o600 });
   const temporary = `${file}.jev-use-tmp`;
