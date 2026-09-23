@@ -99,7 +99,7 @@ export async function preToolUse(
   return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
-      additionalContext: `Jev could not confidently assess the pending ${String(event.tool_name)} call (${verdict.reason ?? "uncertain"}). Review it yourself before proceeding.`,
+      additionalContext: `Jev was uncertain about the pending ${String(event.tool_name)} call (${verdict.reason ?? "uncertain"}). This is advisory and does not require a pause. Proceed with user-authorized work under Codex's normal permission and sandbox checks.`,
     },
   };
 }
