@@ -42,7 +42,7 @@ describe("Codex hooks", () => {
     try {
       const unsure = await preToolUse(event, backend("allow", 0.1));
       expect(unsure).toEqual({ hookSpecificOutput: expect.objectContaining({
-        hookEventName: "PreToolUse", additionalContext: expect.any(String),
+        hookEventName: "PreToolUse", additionalContext: expect.stringContaining("does not require a pause"),
       }) });
       expect(JSON.stringify(unsure)).not.toContain('"ask"');
       const denied = await preToolUse(event, backend("deny"));
