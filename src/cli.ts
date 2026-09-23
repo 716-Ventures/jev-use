@@ -17,7 +17,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -295,6 +295,14 @@ function reportClaudePermissions(): void {
   );
 }
 
+function stableNodePath(): string {
+  if (process.env.JEV_NODE_PATH) return process.env.JEV_NODE_PATH;
+  for (const path of ["/opt/homebrew/bin/node", "/usr/local/bin/node"]) {
+    if (existsSync(path)) return path;
+  }
+  return process.execPath;
+}
+
 async function doctor(args: Args): Promise<void> {
   const { jev, via } = connect(args);
   process.stdout.write(
@@ -354,10 +362,10 @@ async function main(): Promise<void> {
   try {
     if (command === "install" && subcommand === "codex-hooks") {
       createBackend(args.backend);
-      process.stdout.write(`Installed Codex hooks in ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), process.execPath, fileURLToPath(import.meta.url), true, process.env.JEV_TYPESAFE_KEYCHAIN_SERVICE)}\n`);
+      process.stdout.write(`Installed Codex hooks in ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), stableNodePath(), fileURLToPath(import.meta.url), true, process.env.JEV_TYPESAFE_KEYCHAIN_SERVICE)}\n`);
     }
     else if (command === "uninstall" && subcommand === "codex-hooks") {
-      process.stdout.write(`Removed Codex hooks from ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), process.execPath, fileURLToPath(import.meta.url), false)}\n`);
+      process.stdout.write(`Removed Codex hooks from ${updateCodexHooks(process.env.CODEX_HOME ?? join(homedir(), ".codex"), stableNodePath(), fileURLToPath(import.meta.url), false)}\n`);
     }
     else if (command === "install") process.exitCode = runInstall(subcommand);
     else if (command === "serve") await serve(args);

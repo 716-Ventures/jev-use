@@ -42,7 +42,9 @@ export function updateCodexHooks(codexHome: string, nodePath: string, cliPath: s
   const parsed = JSON.parse(original) as HooksFile;
   const updated = install ? mergedCodexHooks(parsed, nodePath, cliPath, keychainService) : removeOwnGroups(structuredClone(parsed));
   mkdirSync(codexHome, { recursive: true });
-  if (existsSync(file)) writeFileSync(`${file}.jev-use-backup`, original, { mode: 0o600 });
+  if (existsSync(file) && !existsSync(`${file}.jev-use-backup`)) {
+    writeFileSync(`${file}.jev-use-backup`, original, { mode: 0o600 });
+  }
   const temporary = `${file}.jev-use-tmp`;
   writeFileSync(temporary, JSON.stringify(updated, null, 2) + "\n", { mode: 0o600 });
   renameSync(temporary, file);
