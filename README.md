@@ -33,6 +33,11 @@ all numbers, methodology, variance and caveats:
 
 ## Install
 
+The npm name `jev-use` still resolves to the upstream release. For this fork's
+Codex lifecycle hooks, install from this repository using the
+[Codex setup guide](harness/codex/README.md). The command below installs the
+upstream MCP package only.
+
 ```bash
 npx -y jev-use install    # wires Claude Code, Codex, and pi — whichever it finds
 ```
