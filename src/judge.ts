@@ -17,6 +17,7 @@ import {
   screenQuestions,
 } from "./dispatch.js";
 import {
+  optionEntries,
   serializeState,
   type ConfidenceSource,
   type GateRequest,
@@ -60,7 +61,7 @@ export async function judge(
       usage = response.usage;
       screened.sendable.forEach(({ index, question }, position) => {
         const raw = response.answers[position];
-        const verdict = raw
+        const verdict = raw && validAnswer(question, raw)
           ? toVerdict(question, raw)
           : missingAnswerVerdict(question, backend.name);
         // No explicit threshold means no single number: each verdict is judged
@@ -92,6 +93,20 @@ export async function judge(
     latencyMs,
     usage,
   };
+}
+
+/** Do not act on a malformed or out-of-enum backend answer, even if it claims high confidence. */
+function validAnswer(question: IdentifiedQuestion, raw: RawAnswer): boolean {
+  if (raw.confidence !== undefined && (!Number.isFinite(raw.confidence) || raw.confidence < 0 || raw.confidence > 1)) return false;
+  if (raw.distribution && Object.values(raw.distribution).some((value) => !Number.isFinite(value) || value < 0 || value > 1)) return false;
+  switch (question.type) {
+    case "noul":
+      return typeof raw.answer === "number" && Number.isFinite(raw.answer) && raw.answer >= 0 && raw.answer <= 1;
+    case "choice":
+      return typeof raw.answer === "string" && optionEntries(question.options ?? []).some(([label]) => label === raw.answer);
+    case "score":
+      return typeof raw.answer === "number" && Number.isFinite(raw.answer) && raw.answer >= 0 && raw.answer <= (question.levels?.length ?? 0) - 1;
+  }
 }
 
 /**
@@ -228,7 +243,9 @@ export async function gate(
     ? "escalate"
     : verdict.answer === "deny"
       ? "deny"
-      : "allow";
+      : verdict.answer === "allow"
+        ? "allow"
+        : "escalate";
 
   return {
     decision,
